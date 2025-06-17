@@ -1,0 +1,19 @@
+# .dockerignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.git/
+.github/
+.vscode/
+*.env
+.env.*
+*.log
+*.logs
+output_data_local/ # Your local output folder
+creators-multi-verse-e434b093ba58.json # Don't copy the key into the image if you mount it
+# Add any other files/folders you don't want in the image
