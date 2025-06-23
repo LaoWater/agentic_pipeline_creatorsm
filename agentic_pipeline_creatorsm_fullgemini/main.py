@@ -23,7 +23,7 @@ origins = [
     "http://localhost:8080",  # Your React dev server
     "http://localhost:5173",  # Vite dev server (common alternative)
     # Add your deployed frontend URL here when you deploy
-    # "https://your-webapp.com",
+    "https://creators-multiverse.com",
 ]
 
 app.add_middleware(

@@ -11,7 +11,7 @@ from google.api_core import exceptions as google_exceptions
 # For now, we'll assume genai.types.FinishReason is the correct path.
 from google.genai.types import GenerateContentConfig, HttpOptions
 
-from visual_model import get_google_genai_client # Assuming this is not used for google_gemini_client init
+from visual_model import get_google_genai_client  # Assuming this is not used for google_gemini_client init
 
 from config import (
     DECISION_LLM_MODEL,
@@ -315,10 +315,15 @@ async def run_platform_adaptation_agent(inputs: PlatformAgentInput) -> PlatformA
         raise
 
 
+
 async def run_translator_agent(inputs: TranslatorAgentInput) -> TranslatorAgentOutput:
     logger.info(f"--- Running Final Translator Agent for language: {inputs['target_language']} ---")
 
-    task_details_content = TRANSLATOR_TASK_PROMPT.format(target_language=inputs["target_language"],
+    logger.debug(f"[TRANSLATOR AGENT DEBUG] Inputs received:\n{json.dumps(inputs, indent=2)}")
+
+
+    task_details_content = TRANSLATOR_TASK_PROMPT.format(text_to_translate=inputs["text_to_translate"],
+                                                         target_language=inputs["target_language"],
                                                          company_name=inputs["company_name"],
                                                          company_mission=inputs["company_mission"],
                                                          original_subject=inputs["original_subject"])  # Corrected key

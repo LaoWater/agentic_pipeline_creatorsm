@@ -18,8 +18,6 @@ gcloud artifacts repositories create $AR_REPO --repository-format=docker --locat
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$BUILD_SA" --role="roles/logging.logWriter" --condition=None
 
 
-    
-
 
 
 # --- Build, Push, and Deploy Flow (copy and paste each line in order) ---
@@ -30,10 +28,13 @@ gcloud builds submit . --tag $AR_IMAGE_PATH --project $PROJECT_ID
 gcloud run deploy $SERVICE_NAME --image $AR_IMAGE_PATH --platform managed --region $REGION --allow-unauthenticated --port 8000 --set-env-vars="GCS_BUCKET_NAME=$GCS_BUCKET_NAME_FOR_APP,GCS_PROJECT_ID=$PROJECT_ID" --update-secrets="GEMINI_API_KEY=${GEMINI_SECRET_NAME}:latest,OPENAI_API_KEY_VALUE=${OPENAI_SECRET_NAME}:latest" --ingress=all --project $PROJECT_ID 
 
 
+
+
 # If you have secrets or environment variables set on the service, you might need to re-add them. Example for a secret:
 # gcloud run deploy $SERVICE_NAME --image $AR_IMAGE_PATH --platform managed --region $REGION --allow-unauthenticated --port 8000 --project $PROJECT_ID --update-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest
 
-Write-Host "Deployment commands executed."
+
+
 
 
 

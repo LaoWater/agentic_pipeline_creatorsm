@@ -57,7 +57,6 @@ Your Mission: Transform the provided English social media content into {target_l
 Company Context:
 - Company Name: {company_name}
 - Company Mission: {company_mission}
-- Company Sentiment: {company_sentiment}
 - Target Platform: {target_platform}
 - Original Subject: {subject}
 
