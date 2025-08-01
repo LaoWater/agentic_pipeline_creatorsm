@@ -24,3 +24,11 @@ This should be the first Decision of the Main Architect Agent -  choosing the ri
 
 So - let the 25 hours spent in debugging and moving around APIs inside Cloud Run - become the Dual-System Architecture -
 Having Both API connected & Serving.
+
+
+---------
+
+
+Prices:
+Running on "GeminiAPI" API KEY - FULL in Google Ecosystem for both Text Gen and Image Gen.
+~ 0.15$ per image

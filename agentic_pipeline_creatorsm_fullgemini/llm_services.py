@@ -327,7 +327,8 @@ async def run_translator_agent(inputs: TranslatorAgentInput) -> TranslatorAgentO
                                                          company_name=inputs["company_name"],
                                                          company_mission=inputs["company_mission"],
                                                          original_subject=inputs["original_subject"],
-                                                         target_platform=PLATFORM_LLM_MODEL)
+                                                         # target_platform=inputs['target_platform']
+                                                         )
     human_message_content = f"""
 Text to translate (from English to {inputs['target_language']}):
 "{inputs['text_to_translate']}"

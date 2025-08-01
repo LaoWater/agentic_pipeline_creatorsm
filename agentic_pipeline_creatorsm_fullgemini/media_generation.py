@@ -22,6 +22,8 @@ async def generate_visual_asset_for_platform(
         output_directory: str,  # e.g., "generated_posts/facebook"
         filename_base: str,  # e.g., "hello_world_intro_post"
         media_type: str,  # Extend for "video" later
+        # Updating to imagen-4.0-generate-preview-06-06, only 15% more expensive but so much worth it i think
+        # Can also explore imagen-4.0-ultra-generate-preview-06-06, going at 25% more.
         model: str = "imagen-3.0-generate-002",  # Default to Google Imagen model
         # Consult Google documentation for the latest and most suitable Imagen models.
         # Cost and speed will vary.

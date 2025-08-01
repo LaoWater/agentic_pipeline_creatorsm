@@ -57,8 +57,7 @@ Your Mission: Transform the provided English social media content into {target_l
 Company Context:
 - Company Name: {company_name}
 - Company Mission: {company_mission}
-- Target Platform: {target_platform}
-- Original Subject: {subject}
+- Original Subject: {original_subject}
 
 Translation Philosophy:
 You don't just translate words - you translate feelings, cultural context, and social dynamics. Consider:
