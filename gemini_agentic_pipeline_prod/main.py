@@ -9,8 +9,8 @@ import uvicorn
 
 # Ensure your project structure allows these imports
 # If pipeline_orchestrator is in the same directory:
-from pipeline_orchestrator import generate_social_media_posts_pipeline
-from api_models import PipelineRequest
+from pipeline_orchestrator import generate_social_media_posts_pipeline, generate_enhanced_social_media_posts_pipeline
+from api_models import PipelineRequest, ContentGeneratorData
 from config import BASE_OUTPUT_FOLDER  # For ensuring output folder exists
 
 app = FastAPI(
@@ -108,6 +108,43 @@ async def create_social_media_posts(
     except Exception as e:
         print(f"Unhandled error in /generate-posts endpoint: {e}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+
+@app.post("/generate-posts-enhanced", summary="Enhanced Social Media Post Generation with Image Controls")
+async def create_enhanced_social_media_posts(
+        request: ContentGeneratorData,
+        # background_tasks: BackgroundTasks # Option 1: Run in background
+):
+    """
+    Enhanced endpoint that accepts the new ContentGeneratorData structure with image controls.
+    Supports hierarchical image control (Level 1 global, Level 2 platform-specific).
+    """
+    try:
+        result = await run_enhanced_pipeline_background(request)
+        if result.get("error"):
+            return JSONResponse(status_code=400, content=result)
+        return result
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        print(f"Unhandled error in /generate-posts-enhanced endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+
+async def run_enhanced_pipeline_background(request_data: ContentGeneratorData):
+    """Helper to run the enhanced pipeline with new ContentGeneratorData structure."""
+    try:
+        print(f"Received enhanced pipeline request for company: {request_data.company.name}, topic: {request_data.content.topic}")
+        
+        # Call the enhanced pipeline function
+        result = await generate_enhanced_social_media_posts_pipeline(request_data)
+        
+        print(f"Enhanced pipeline completed for company: {request_data.company.name}. Result ID: {result.get('pipeline_id')}")
+        return result
+        
+    except Exception as e:
+        print(f"Error processing enhanced pipeline for company: {request_data.company.name}. Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced pipeline processing failed: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -32,3 +32,6 @@ Having Both API connected & Serving.
 Prices:
 Running on "GeminiAPI" API KEY - FULL in Google Ecosystem for both Text Gen and Image Gen.
 ~ 0.15$ per image
+
+----------
+

@@ -1,6 +1,6 @@
 # api_models.py
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 
 # Re-use from your existing data_models if they fit, or define specific for API
@@ -13,6 +13,71 @@ class PostHistoryItem(BaseModel):  # Example, adapt from your PostHistoryEntry
     platform: str
     text: str
     # ... other fields
+
+
+# NEW: Enhanced models for ContentGeneratorData structure
+class Company(BaseModel):
+    id: str = Field(..., description="Unique identifier for the company")
+    name: str = Field(..., description="Company name")
+    mission: str = Field(..., description="Company mission statement")
+    tone_of_voice: str = Field(..., description="Company's tone of voice")
+    primary_color_1: str = Field(..., description="Primary brand color (hex format)")
+    primary_color_2: str = Field(..., description="Secondary brand color (hex format)")
+    logo_path: Optional[str] = Field(None, description="Path to company logo file")
+
+
+class Content(BaseModel):
+    topic: str = Field(..., description="Main topic for the content")
+    description: str = Field(..., description="Detailed description of the content")
+    hashtags: List[str] = Field(..., description="List of hashtags to include")
+    call_to_action: str = Field(..., description="Call to action text")
+
+
+class ImageControlLevel1(BaseModel):
+    enabled: bool = Field(..., description="Whether global image control is enabled")
+    style: str = Field(..., description="Global image style preference")
+    guidance: str = Field(..., description="Global image guidance instructions")
+    caption: str = Field(..., description="Global image caption")
+    ratio: str = Field(..., description="Global image aspect ratio")
+    starting_image_url: Optional[str] = Field(None, description="URL of starting image for global control")
+
+
+class PlatformImageControl(BaseModel):
+    enabled: bool = Field(..., description="Whether platform-specific image control is enabled")
+    style: str = Field(..., description="Platform-specific image style")
+    guidance: str = Field(..., description="Platform-specific image guidance")
+    caption: str = Field(..., description="Platform-specific image caption")
+    ratio: str = Field(..., description="Platform-specific image aspect ratio")
+    starting_image_url: Optional[str] = Field(None, description="URL of starting image for platform")
+
+
+class ImageControlLevel2(BaseModel):
+    facebook: Optional[PlatformImageControl] = None
+    instagram: Optional[PlatformImageControl] = None
+    linkedin: Optional[PlatformImageControl] = None
+    twitter: Optional[PlatformImageControl] = None
+
+
+class ImageControl(BaseModel):
+    level_1: ImageControlLevel1 = Field(..., description="Global image control settings")
+    level_2: ImageControlLevel2 = Field(..., description="Platform-specific image control overrides")
+
+
+class Platform(BaseModel):
+    platform: str = Field(..., description="Platform name (facebook|instagram|linkedin|twitter)")
+    post_type: str = Field(..., description="Type of post for this platform")
+    selected: bool = Field(..., description="Whether this platform is selected for generation")
+
+
+class ContentGeneratorData(BaseModel):
+    company: Company = Field(..., description="Company information")
+    content: Content = Field(..., description="Content details")
+    image_control: ImageControl = Field(..., description="Image generation control settings")
+    platforms: List[Platform] = Field(..., description="Platform configurations")
+    
+    # Optional: Keep compatibility fields for transition
+    language: str = Field(default="English", description="Target language for content")
+    upload_to_cloud: bool = Field(default=True, description="Whether to upload to cloud storage")
 
 
 class PipelineRequest(BaseModel):

@@ -18,6 +18,8 @@ from llm_services import run_layer_2_decision_maker, run_platform_adaptation_age
 from media_generation import generate_visual_asset_for_platform
 from file_utils import get_filename_base, ensure_platform_folder_exists, save_text_content
 from cloud_storage_service import cloud_storage, upload_generated_post_files
+from image_control_service import ImageControlProcessor
+from api_models import ContentGeneratorData
 
 
 # This function will now take all dynamic parameters
@@ -393,6 +395,305 @@ async def main():
     print(f"- Use the pipeline_id '{pipeline_result['pipeline_id']}' to track this generation")
 
     print("\n🏁 All operations completed!")
+
+
+async def generate_enhanced_social_media_posts_pipeline(
+    request_data: ContentGeneratorData
+) -> Dict[str, Any]:
+    """
+    Enhanced pipeline that processes the new ContentGeneratorData structure with image controls.
+    Supports hierarchical image control (Level 1 global, Level 2 platform-specific).
+    """
+    print("🚀 Starting Enhanced Social Media Post Generation Pipeline 🚀")
+    
+    # Extract data from the new structure
+    company = request_data.company
+    content = request_data.content
+    image_control = request_data.image_control
+    platforms = request_data.platforms
+    
+    # Filter selected platforms
+    selected_platforms = [p for p in platforms if p.selected]
+    if not selected_platforms:
+        error_msg = "No platforms selected for content generation."
+        print(f"🚫 Error: {error_msg}")
+        return {
+            "error": error_msg,
+            "pipeline_id": f"{get_filename_base(content.topic)}_error_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+            "subject": content.topic,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "posts": [],
+            "cloud_uploads": []
+        }
+    
+    # Convert to the format expected by the existing pipeline
+    platforms_post_types_map = [
+        {platform.platform: platform.post_type} for platform in selected_platforms
+    ]
+    
+    # Create filename base from topic
+    filename_base = get_filename_base(content.topic)
+    print(f"🎬 Using filename base: {filename_base}")
+    
+    # Prepare company colors for image enhancement
+    company_colors = {
+        "primary_color_1": company.primary_color_1,
+        "primary_color_2": company.primary_color_2
+    }
+    
+    # --- Layer 2: Core Text Generation (using existing structure) ---
+    target_platforms = [p.platform for p in selected_platforms]
+    layer2_input_data = Layer2Input(
+        company_name=company.name,
+        company_mission=company.mission,
+        company_sentiment=company.tone_of_voice,  # Use tone_of_voice from company
+        subject=content.topic,
+        platforms_to_target=target_platforms,
+        requirements=None,  # Could be derived from content.description if needed
+        posts_history=None,  # Not provided in new structure
+        language=request_data.language,
+        tone=company.tone_of_voice,
+        platform_post_type="Enhanced content with image controls"
+    )
+    
+    layer2_result = await run_layer_2_decision_maker(layer2_input_data)
+    core_post_text = layer2_result["core_post_text"]
+    print(f"📝 Core post text generated: '{core_post_text[:100]}...'")
+    
+    # --- Enhanced Platform Adaptation with Image Controls ---
+    platform_outputs_map = {}
+    platforms_needing_media_info = []
+    
+    for platform in selected_platforms:
+        platform_name = platform.platform
+        print(f"⚙️ Processing enhanced adaptation for {platform_name}")
+        
+        # Resolve effective image control for this platform
+        effective_control = ImageControlProcessor.resolve_effective_image_control(
+            image_control, platform_name
+        )
+        
+        # Download starting image if provided
+        starting_image_path = None
+        if effective_control.starting_image_url:
+            platform_dir = ensure_platform_folder_exists(BASE_OUTPUT_FOLDER, platform_name)
+            starting_image_path = await ImageControlProcessor.download_starting_image(
+                effective_control.starting_image_url,
+                platform_dir,
+                filename_base
+            )
+            if starting_image_path:
+                effective_control.starting_image_path = starting_image_path
+        
+        # Run platform adaptation
+        platform_agent_input = PlatformAgentInput(
+            company_name=company.name,
+            company_mission=company.mission,
+            company_sentiment=company.tone_of_voice,
+            subject=content.topic,
+            core_post_text_suggestion=core_post_text,
+            platform_name=platform_name,
+            platform_post_type=platform.post_type,
+            language=request_data.language,
+            tone=company.tone_of_voice
+        )
+        
+        platform_result = await run_platform_adaptation_agent(platform_agent_input)
+        
+        # Enhance media prompt with image controls if media is needed
+        original_media_prompt = platform_result.get("platform_media_generation_prompt")
+        if original_media_prompt and effective_control.enabled:
+            enhanced_prompt = ImageControlProcessor.enhance_prompt_with_image_controls(
+                original_media_prompt,
+                effective_control,
+                company_colors
+            )
+            platform_result["platform_media_generation_prompt"] = enhanced_prompt
+            print(f"🎨 Enhanced media prompt for {platform_name}")
+        
+        platform_outputs_map[platform_name] = platform_result
+        
+        # Track platforms needing media
+        if original_media_prompt:
+            platforms_needing_media_info.append((
+                platform_name,
+                platform_result["platform_media_generation_prompt"],
+                "image"  # Default to image for now
+            ))
+    
+    # --- Enhanced Media Generation ---
+    generated_media_paths = []
+    if platforms_needing_media_info:
+        print(f"\n🎨 Generating {len(platforms_needing_media_info)} enhanced media assets...")
+        
+        media_generation_tasks = []
+        for platform_name, enhanced_prompt, media_type in platforms_needing_media_info:
+            platform_dir = ensure_platform_folder_exists(BASE_OUTPUT_FOLDER, platform_name)
+            
+            # Get effective control for additional config
+            effective_control = ImageControlProcessor.resolve_effective_image_control(
+                image_control, platform_name
+            )
+            
+            # Generate config for image generation
+            image_config = ImageControlProcessor.get_image_generation_config(effective_control)
+            
+            task = generate_visual_asset_for_platform(
+                image_prompt=enhanced_prompt,
+                output_directory=platform_dir,
+                filename_base=filename_base,
+                media_type=media_type
+            )
+            media_generation_tasks.append(task)
+        
+        try:
+            generated_media_paths = await asyncio.gather(*media_generation_tasks)
+            print(f"✅ Generated {len([p for p in generated_media_paths if p])} media assets successfully")
+        except Exception as e:
+            print(f"🚨 Error during media generation: {e}")
+            generated_media_paths = [None] * len(platforms_needing_media_info)
+    
+    # --- Assembly and Cloud Upload (similar to existing pipeline) ---
+    final_posts_results = []
+    cloud_upload_tasks = []
+    cloud_upload_results_list = []
+    
+    media_path_idx = 0
+    for platform in selected_platforms:
+        platform_name = platform.platform
+        platform_output_data = platform_outputs_map.get(platform_name)
+        if not platform_output_data:
+            continue
+        
+        platform_dir = ensure_platform_folder_exists(BASE_OUTPUT_FOLDER, platform_name)
+        text_content = platform_output_data["platform_specific_text"]
+        
+        # Add hashtags and CTA to text content
+        enhanced_text = text_content
+        if content.hashtags:
+            enhanced_text += f"\n\n{' '.join(['#' + tag for tag in content.hashtags])}"
+        if content.call_to_action:
+            enhanced_text += f"\n\n{content.call_to_action}"
+        
+        text_file_path = save_text_content(platform_dir, filename_base, enhanced_text)
+        
+        # Handle media assets
+        current_media_asset = None
+        media_prompt_used = None
+        media_file_path = None
+        
+        media_info = next((info for info in platforms_needing_media_info if info[0] == platform_name), None)
+        if media_info and media_path_idx < len(generated_media_paths):
+            path_or_none = generated_media_paths[media_path_idx]
+            if path_or_none:
+                media_file_path = path_or_none
+                current_media_asset = SavedMediaAsset(
+                    type="image",
+                    file_path=media_file_path
+                )
+                media_prompt_used = media_info[1]
+            media_path_idx += 1
+        
+        # Cloud upload
+        if request_data.upload_to_cloud:
+            cloud_upload_task = upload_generated_post_files(
+                filename_base=filename_base,
+                platform=platform_name,
+                text_content=enhanced_text,
+                media_file_path=media_file_path,
+                media_generation_prompt=media_prompt_used
+            )
+            cloud_upload_tasks.append((platform_name, cloud_upload_task))
+        
+        final_posts_results.append(FinalGeneratedPost(
+            platform=platform_name,
+            post_type=platform.post_type,
+            text_file_path=text_file_path,
+            media_asset=current_media_asset,
+            original_text_content=enhanced_text,
+            media_generation_prompt_used=media_prompt_used
+        ))
+    
+    # Execute cloud uploads
+    if request_data.upload_to_cloud and cloud_upload_tasks:
+        print(f"\n☁️ Starting {len(cloud_upload_tasks)} cloud upload tasks...")
+        try:
+            cloud_upload_results_tuples = await asyncio.gather(*(task for _, task in cloud_upload_tasks))
+            for i, upload_result in enumerate(cloud_upload_results_tuples):
+                platform_name_for_upload = cloud_upload_tasks[i][0]
+                cloud_upload_results_list.append({
+                    "platform": platform_name_for_upload,
+                    "upload_result": upload_result
+                })
+                for post in final_posts_results:
+                    if post["platform"] == platform_name_for_upload:
+                        post["cloud_storage"] = upload_result
+                        break
+        except Exception as e:
+            print(f"🚨 Error during cloud uploads: {e}")
+    
+    # Create summary
+    pipeline_summary = {
+        "pipeline_id": f"{filename_base}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+        "subject": content.topic,
+        "company_info": {
+            "name": company.name,
+            "mission": company.mission,
+            "tone_of_voice": company.tone_of_voice
+        },
+        "content_details": {
+            "topic": content.topic,
+            "description": content.description,
+            "hashtags": content.hashtags,
+            "call_to_action": content.call_to_action
+        },
+        "image_controls_used": {
+            "level_1_enabled": image_control.level_1.enabled,
+            "level_2_overrides": len([p for p in [
+                image_control.level_2.facebook,
+                image_control.level_2.instagram,
+                image_control.level_2.linkedin,
+                image_control.level_2.twitter
+            ] if p and p.enabled])
+        },
+        "language_used": request_data.language,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "posts": final_posts_results,
+        "cloud_uploads_summary": cloud_upload_results_list
+    }
+    
+    # Save and upload summary
+    summary_filename = os.path.join(BASE_OUTPUT_FOLDER, f"{filename_base}_enhanced_summary.json")
+    try:
+        with open(summary_filename, "w", encoding='utf-8') as f:
+            json.dump(pipeline_summary, f, indent=4, ensure_ascii=False)
+        print(f"📋 Enhanced summary saved to {summary_filename}")
+    except IOError as e:
+        print(f"🚨 Error saving enhanced summary: {e}")
+    
+    if request_data.upload_to_cloud:
+        try:
+            summary_cloud_path = cloud_storage.generate_cloud_path(
+                filename_base, "enhanced_summary", "metadata", "json"
+            )
+            summary_upload_result = await cloud_storage.upload_json_data(
+                pipeline_summary,
+                summary_cloud_path,
+                metadata={
+                    "content_type": "enhanced_pipeline_summary",
+                    "subject": content.topic,
+                    "company": company.name,
+                    "platforms_count": str(len(selected_platforms)),
+                    "language": request_data.language
+                }
+            )
+            pipeline_summary["summary_cloud_storage"] = summary_upload_result
+            print(f"☁️ Enhanced summary uploaded to cloud: {summary_upload_result.get('public_url', 'URL not available')}")
+        except Exception as e:
+            print(f"🚨 Error uploading enhanced summary to cloud: {e}")
+    
+    print("\n✅ Enhanced Social Media Post Generation Pipeline Complete! ✅")
+    return pipeline_summary
 
 
 if __name__ == "__main__":
