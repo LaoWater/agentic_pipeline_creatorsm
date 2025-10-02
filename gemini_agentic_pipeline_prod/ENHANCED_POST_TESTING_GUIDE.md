@@ -93,7 +93,7 @@ The request body must be a JSON object with the following structure. See `test_e
     },
     "platforms": [
         {"platform": "instagram", "post_type": "Image", "selected": true},
-        {"platform": "linkedin", "post_type": "Image", "selected": true},
+        {"platform": "linkedin", "post_type": "Image", "selected": false},
         {"platform": "twitter", "post_type": "Text", "selected": true},
         {"platform": "facebook", "post_type": "Image", "selected": false}
     ],
