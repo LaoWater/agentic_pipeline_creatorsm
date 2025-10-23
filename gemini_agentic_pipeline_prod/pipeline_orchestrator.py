@@ -492,7 +492,7 @@ async def generate_enhanced_social_media_posts_pipeline(
             company_sentiment=company.tone_of_voice,
             subject=content.topic,
             core_post_text_suggestion=core_post_text,
-            platform_name=platform_name,
+            target_platform=platform_name,
             platform_post_type=platform.post_type,
             language=request_data.language,
             tone=company.tone_of_voice
@@ -542,7 +542,8 @@ async def generate_enhanced_social_media_posts_pipeline(
                 image_prompt=enhanced_prompt,
                 output_directory=platform_dir,
                 filename_base=filename_base,
-                media_type=media_type
+                media_type=media_type,
+                image_config=image_config  # Pass the generated config
             )
             media_generation_tasks.append(task)
         

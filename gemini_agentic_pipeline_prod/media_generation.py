@@ -1,15 +1,14 @@
 # media_generation.py
 import asyncio
 import logging
-from typing import Literal, Optional
+from typing import Literal, Optional, Dict, Any
 
 # Import the Google Imagen specific function from visual_model.py
 from visual_model import generate_and_save_image_google
 
-# from config import IMAGE_FILE_EXTENSION  # Assuming this is defined in your config
+from config import IMAGE_FILE_EXTENSION
 
 # Default configuration - adjust as needed
-IMAGE_FILE_EXTENSION = "png"  # Can be moved to config.py if needed
 
 # --- Setup Logging ---
 # Using the root logger. Configure it in your main application entry point.
@@ -22,11 +21,13 @@ async def generate_visual_asset_for_platform(
         output_directory: str,  # e.g., "generated_posts/facebook"
         filename_base: str,  # e.g., "hello_world_intro_post"
         media_type: str,  # Extend for "video" later
-        # Updating to imagen-4.0-generate-preview-06-06, only 15% more expensive but so much worth it i think
+        image_config: Optional[Dict[str, Any]] = None,  # NEW: For aspect ratio, etc.
+        model: str = "imagen-4.0-fast-generate-001",  # Default to Google Imagen model - imagen-3.0-generate-002 - first used model
+        # Updating to imagen-4.0-generate-preview-06-06, only 15% more expensive but so much worth it, i think
         # Can also explore imagen-4.0-ultra-generate-preview-06-06, going at 25% more.
-        model: str = "imagen-3.0-generate-002",  # Default to Google Imagen model
         # Consult Google documentation for the latest and most suitable Imagen models.
         # Cost and speed will vary.
+        # Can also explore gemini 2.5 (nano banana) - and try different ones once we integrate the starting image option
         file_extension: str = IMAGE_FILE_EXTENSION
 ) -> str:
     """
@@ -42,6 +43,7 @@ async def generate_visual_asset_for_platform(
         media_type: Type of media to generate (currently only "image" supported).
         model: Google Imagen model to use for generation.
         file_extension: File extension for the generated image.
+        image_config: Optional dict with configuration settings for image generation.
 
     Returns:
         The file path where the media was saved.
@@ -62,7 +64,8 @@ async def generate_visual_asset_for_platform(
                 output_directory=output_directory,
                 filename_base=filename_base,
                 file_extension=file_extension,
-                model_name=model  # Pass the model to the 'model_name' parameter in visual_model
+                model_name=model,  # Pass the model to the 'model_name' parameter
+                image_config=image_config  # NEW: Pass the image config
             )
 
             logger.info(f"✅ Media Generation Task: Asset ready at {file_path}")

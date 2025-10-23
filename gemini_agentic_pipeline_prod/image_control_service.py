@@ -179,17 +179,10 @@ class ImageControlProcessor:
         """
         config = {}
         
-        # Map ratio to actual dimensions or model parameters
-        ratio_mapping = {
-            "1:1": {"aspect_ratio": "square"},
-            "16:9": {"aspect_ratio": "landscape"},
-            "9:16": {"aspect_ratio": "portrait"},
-            "4:5": {"aspect_ratio": "portrait"},
-            "1.91:1": {"aspect_ratio": "landscape"}
-        }
-        
-        if effective_control.ratio in ratio_mapping:
-            config.update(ratio_mapping[effective_control.ratio])
+        # Map ratio string to the value expected by the Google Imagen API
+        # The API expects the ratio as a string, e.g., "1:1", "16:9"
+        if effective_control.ratio:
+            config["aspect_ratio"] = effective_control.ratio
         
         # Add starting image if available
         if effective_control.starting_image_path:

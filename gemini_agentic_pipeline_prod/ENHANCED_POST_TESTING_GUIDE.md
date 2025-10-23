@@ -69,7 +69,7 @@ The request body must be a JSON object with the following structure. See `test_e
             "style": "Modern, vibrant, tech-inspired digital art",
             "guidance": "Focus on creativity and innovation, use cosmic/magical elements subtly",
             "caption": "AI-powered content creation revolution",
-            "ratio": "1:1",
+            "ratio": "9:16",
             "starting_image_url": null
         },
         "level_2": {
@@ -86,21 +86,29 @@ The request body must be a JSON object with the following structure. See `test_e
                 "style": "Professional, clean, business-oriented",
                 "guidance": "Corporate and professional look suitable for LinkedIn",
                 "caption": "Professional announcement",
-                "ratio": "1.91:1",
+                "ratio": "16:9",
                 "starting_image_url": null
             }
         }
     },
     "platforms": [
         {"platform": "instagram", "post_type": "Image", "selected": true},
-        {"platform": "linkedin", "post_type": "Image", "selected": false},
+        {"platform": "linkedin", "post_type": "Image", "selected": true},
         {"platform": "twitter", "post_type": "Text", "selected": true},
-        {"platform": "facebook", "post_type": "Image", "selected": false}
+        {"platform": "facebook", "post_type": "Image", "selected": true}
     ],
     "language": "English",
     "upload_to_cloud": false
 }
+
 ```
+# So testing should output:
+
+intagram 1:1 image as per image control level 2
+linkedin 1.91 image as per image control level 2
+Facebook 9:16 image as per image control level 1 (no level 2)
+Twitter just text
+
 
 ## 4. Testing with Postman
 
