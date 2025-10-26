@@ -3,12 +3,6 @@ from google.genai import types
 from PIL import Image # PIL is implicitly used by the library, but good to know
 import os
 
-# --- Configuration ---
-# Ensure your GOOGLE_API_KEY is set as an environment variable.
-# The client will find it automatically.
-# e.g., os.environ["GOOGLE_API_KEY"] = "YOUR_API_KEY"
-# genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-
 
 # Create client
 print("[*] Initializing Google Generative AI client...")
@@ -20,11 +14,11 @@ try:
     # Using the preview model from your example.
     # If this model is unavailable to you, switch to 'imagen-3.0-generate-06-06'
     response = client.models.generate_images(
-        model='imagen-4.0-fast-generate-preview-06-06',
-        prompt='A high-resolution, photorealistic image of a friendly robot holding a red skateboard in a sunny skatepark.',
+        model='imagen-4.0-ultra-generate-001',
+        prompt='A high-resolution, photorealistic image of the DoDo bird flying over a calm jungle',
         config=types.GenerateImagesConfig(
             number_of_images=1,
-            aspect_ratio="1:1" # Explicitly setting aspect ratio
+            aspect_ratio="9:16"
         )
     )
 
@@ -46,7 +40,7 @@ try:
             # img.show()
 
             # Save the image directly using its .save() method
-            filename = f"output_robot_{idx + 1}.png"
+            filename = f"imagen4ultra_dodo_{idx + 1}.png"
             img.save(filename)
             print(f"[+] Image saved successfully as {filename}")
 
