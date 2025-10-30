@@ -119,7 +119,7 @@ async def generate_social_media_posts_pipeline(
     platform_outputs_map: Dict[str, PlatformAgentOutput] = {}
     platform_post_types_used: Dict[str, str] = {}
 
-    # Iterate through gathered results and perform translation if needed
+    # First, store all platform adaptation results WITHOUT translation
     for i, platform_result_from_gather in enumerate(platform_agent_results_gathered):
         platform_name = platform_adaptation_tasks[i][0]
         platform_post_type_config_for_platform = platform_adaptation_tasks[i][1]
@@ -127,10 +127,20 @@ async def generate_social_media_posts_pipeline(
         # Make a mutable copy if needed, or ensure PlatformAgentOutput is a dict
         current_platform_output: PlatformAgentOutput = platform_result_from_gather
 
-        # --- Translation Step ---
-        if language.lower() != "english" and language.lower() != "en":  # More robust check
+        platform_outputs_map[platform_name] = current_platform_output
+        platform_post_types_used[platform_name] = platform_post_type_config_for_platform
+
+    # --- FINAL TRANSLATION LAYER ---
+    # Translation happens AFTER all platform adaptations are complete
+    if language.lower() != "english" and language.lower() != "en":  # More robust check
+        print(f"\n🌍 TRANSLATION LAYER: Translating all content from English to {language}...")
+        translation_tasks = []
+        platform_names_for_translation = []
+
+        for platform_name, current_platform_output in platform_outputs_map.items():
             original_english_text = current_platform_output["platform_specific_text"]
-            print(f"🌍 Translating content for {platform_name} from English to {language}...")
+            print(f"  🌍 Preparing translation for {platform_name}...")
+
             translator_input = TranslatorAgentInput(
                 text_to_translate=original_english_text,
                 target_language=language,
@@ -138,17 +148,22 @@ async def generate_social_media_posts_pipeline(
                 company_mission=company_mission,
                 original_subject=subject
             )
-            try:
-                translation_output = await run_translator_agent(translator_input)
-                current_platform_output["platform_specific_text"] = translation_output["translated_text"]
-                print(f"🌍 Translation successful for {platform_name}.")
-            except Exception as e:
-                print(
-                    f"🚨 Error translating content for {platform_name} to {language}: {e}. Using original English text.")
-                # current_platform_output["platform_specific_text"] remains original_english_text
+            translation_tasks.append(run_translator_agent(translator_input))
+            platform_names_for_translation.append(platform_name)
 
-        platform_outputs_map[platform_name] = current_platform_output
-        platform_post_types_used[platform_name] = platform_post_type_config_for_platform
+        # Execute all translations in parallel
+        translation_results = await asyncio.gather(*translation_tasks, return_exceptions=True)
+
+        # Apply translations to platform outputs
+        for i, translation_result in enumerate(translation_results):
+            platform_name = platform_names_for_translation[i]
+            if isinstance(translation_result, Exception):
+                print(f"  🚨 Error translating content for {platform_name}: {translation_result}. Using original English text.")
+            else:
+                platform_outputs_map[platform_name]["platform_specific_text"] = translation_result["translated_text"]
+                print(f"  ✅ Translation successful for {platform_name}.")
+
+        print(f"✅ TRANSLATION LAYER COMPLETE: Translated {len(platform_names_for_translation)} platforms.")
 
     # --- Media Generation (if applicable, per platform) ---
     final_posts_results: List[FinalGeneratedPost] = []
@@ -584,29 +599,10 @@ async def generate_enhanced_social_media_posts_pipeline(
         elif original_media_prompt:
             print(f"  ○ Using default media prompt for {platform_name} (no image controls)")
 
-        # STEP 6: TRANSLATION (if needed)
-        # Critical fix: Translate platform-specific text if language is not English
-        if request_data.language.lower() not in ["english", "en"]:
-            original_english_text = platform_result["platform_specific_text"]
-            print(f"🌍 Translating content for {platform_name} from English to {request_data.language}...")
-            translator_input = TranslatorAgentInput(
-                text_to_translate=original_english_text,
-                target_language=request_data.language,
-                company_name=company.name,
-                company_mission=company.mission,
-                original_subject=content.topic
-            )
-            try:
-                translation_output = await run_translator_agent(translator_input)
-                platform_result["platform_specific_text"] = translation_output["translated_text"]
-                print(f"✅ Translation successful for {platform_name}.")
-            except Exception as e:
-                print(f"🚨 Error translating content for {platform_name} to {request_data.language}: {e}. Using original English text.")
-                # platform_result["platform_specific_text"] remains original_english_text
-
+        # Store platform result WITHOUT translation (translation happens later as final layer)
         platform_outputs_map[platform_name] = platform_result
 
-        # STEP 7: TRACK PLATFORMS NEEDING MEDIA
+        # STEP 6: TRACK PLATFORMS NEEDING MEDIA
         if original_media_prompt:
             media_type = "video" if platform.post_type == "Video" else "image"
             platforms_needing_media_info.append((
@@ -615,7 +611,42 @@ async def generate_enhanced_social_media_posts_pipeline(
                 media_type,
                 effective_control  # Pass the effective control for generation config
             ))
-    
+
+    # --- FINAL TRANSLATION LAYER ---
+    # Translation happens AFTER all platform adaptations are complete, BEFORE media generation
+    if request_data.language.lower() not in ["english", "en"]:
+        print(f"\n🌍 TRANSLATION LAYER: Translating all content from English to {request_data.language}...")
+        translation_tasks = []
+        platform_names_for_translation = []
+
+        for platform_name, platform_result in platform_outputs_map.items():
+            original_english_text = platform_result["platform_specific_text"]
+            print(f"  🌍 Preparing translation for {platform_name}...")
+
+            translator_input = TranslatorAgentInput(
+                text_to_translate=original_english_text,
+                target_language=request_data.language,
+                company_name=company.name,
+                company_mission=company.mission,
+                original_subject=content.topic
+            )
+            translation_tasks.append(run_translator_agent(translator_input))
+            platform_names_for_translation.append(platform_name)
+
+        # Execute all translations in parallel
+        translation_results = await asyncio.gather(*translation_tasks, return_exceptions=True)
+
+        # Apply translations to platform outputs
+        for i, translation_result in enumerate(translation_results):
+            platform_name = platform_names_for_translation[i]
+            if isinstance(translation_result, Exception):
+                print(f"  🚨 Error translating content for {platform_name}: {translation_result}. Using original English text.")
+            else:
+                platform_outputs_map[platform_name]["platform_specific_text"] = translation_result["translated_text"]
+                print(f"  ✅ Translation successful for {platform_name}.")
+
+        print(f"✅ TRANSLATION LAYER COMPLETE: Translated {len(platform_names_for_translation)} platforms.")
+
     # --- Enhanced Media Generation ---
     generated_media_paths = []
     if platforms_needing_media_info:

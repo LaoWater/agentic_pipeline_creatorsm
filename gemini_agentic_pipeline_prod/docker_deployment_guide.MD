@@ -64,3 +64,53 @@ gcloud builds submit --tag gcr.io/langgraph-chat/langgraph-api
 
 Docker File Deploy in Google:
 gcloud run deploy langgraph-api --image gcr.io/terapie-acasa/langgraph-api --platform managed --region europe-central2 --allow-unauthenticated --port 8000
+
+
+
+
+
+
+-------------------------
+
+MAC:
+Open terminal in project folder and Define Variables:
+# --- Define variables ---
+PROJECT_ID="creators-multi-verse"
+REGION="europe-central2"
+AR_REPO="creatorsm-docker-repo"
+IMAGE_NAME="gcs-openai-gemini-app"
+IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
+AR_IMAGE_PATH="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
+SERVICE_NAME="gcs-gemini-openai-app"
+BUILD_SA="creatorsmultiv-service@creators-multi-verse.iam.gserviceaccount.com"
+GEMINI_SECRET_NAME="GEMINI_API_KEY"
+OPENAI_SECRET_NAME="OPENAI_API_KEY_VALUE"
+GCS_BUCKET_NAME_FOR_APP="creatorsm-media-bucket"
+
+echo $PROJECT_ID
+
+*** Optional if not already enabled
+# Create Artifact Registry repo (only once per region/project)
+gcloud artifacts repositories create $AR_REPO \
+  --repository-format=docker \
+  --location=$REGION \
+  --description="Docker repository for my applications" \
+  --project $PROJECT_ID
+
+# Give Cloud Build service account logging rights
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:$BUILD_SA" \
+  --role="roles/logging.logWriter"
+
+
+gcloud builds submit . --tag $AR_IMAGE_PATH --project $PROJECT_ID
+gcloud run deploy $SERVICE_NAME \
+  --image $AR_IMAGE_PATH \
+  --platform managed \
+  --region $REGION \
+  --allow-unauthenticated \
+  --port 8000 \
+  --set-env-vars="GCS_BUCKET_NAME=$GCS_BUCKET_NAME_FOR_APP,GCS_PROJECT_ID=$PROJECT_ID" \
+  --update-secrets="GEMINI_API_KEY=${GEMINI_SECRET_NAME}:latest,OPENAI_API_KEY_VALUE=${OPENAI_SECRET_NAME}:latest" \
+  --ingress=all \
+  --project $PROJECT_ID
