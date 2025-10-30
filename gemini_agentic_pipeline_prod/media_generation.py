@@ -6,7 +6,7 @@ from typing import Literal, Optional, Dict, Any
 # Import the Google Imagen specific function from visual_model.py
 from visual_model import generate_and_save_image_google
 
-from config import IMAGE_FILE_EXTENSION
+from config import IMAGE_FILE_EXTENSION, IMAGE_GENERATION_MODEL
 
 # Default configuration - adjust as needed
 
@@ -22,12 +22,7 @@ async def generate_visual_asset_for_platform(
         filename_base: str,  # e.g., "hello_world_intro_post"
         media_type: str,  # Extend for "video" later
         image_config: Optional[Dict[str, Any]] = None,  # NEW: For aspect ratio, etc.
-        model: str = "imagen-4.0-fast-generate-001",  # Default to Google Imagen model - imagen-3.0-generate-002 - first used model
-        # Updating to imagen-4.0-generate-preview-06-06, only 15% more expensive but so much worth it, i think
-        # Can also explore imagen-4.0-ultra-generate-preview-06-06, going at 25% more.
-        # Consult Google documentation for the latest and most suitable Imagen models.
-        # Cost and speed will vary.
-        # Can also explore gemini 2.5 (nano banana) - and try different ones once we integrate the starting image option
+        model: str = IMAGE_GENERATION_MODEL,  # Centralized model config from config.py
         file_extension: str = IMAGE_FILE_EXTENSION
 ) -> str:
     """
@@ -118,7 +113,7 @@ async def generate_multiple_visual_assets(
             output_directory=platform_dir,
             filename_base=config['filename_base'],
             media_type=config.get('media_type', 'image'),
-            model=config.get('model', "imagen-3.0-generate-002"), # Allow per-task model override
+            model=config.get('model', IMAGE_GENERATION_MODEL),  # Allow per-task model override, default to centralized config
             file_extension=config.get('file_extension', IMAGE_FILE_EXTENSION)
         )
         tasks.append(task)
@@ -160,7 +155,7 @@ async def demo_single_generation():
             image_prompt="A professional social media post background with modern gradient colors, designed using Google Imagen.",
             output_directory="demo_output_google",
             filename_base="demo_post_bg_google",
-            model="imagen-3.0-generate-002" # Explicitly specifying model for demo
+            model=IMAGE_GENERATION_MODEL  # Using centralized model config
         )
         logger.info(f"Single demo (Google Imagen) completed successfully: {file_path}")
         return file_path
@@ -183,7 +178,7 @@ async def demo_batch_generation():
             'prompt': 'A professional LinkedIn banner with a subtle business theme and abstract geometric patterns, Google Imagen',
             'platform': 'linkedin',
             'filename_base': 'business_banner_google',
-            'model': 'imagen-3.0-generate-002' # Example of per-task model, can be different
+            'model': IMAGE_GENERATION_MODEL  # Example of per-task model, can be different or use default
         },
         {
             'prompt': 'A fun Facebook cover photo with diverse community members interacting joyfully, illustration style, Imagen',

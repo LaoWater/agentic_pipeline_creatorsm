@@ -74,10 +74,14 @@ class ContentGeneratorData(BaseModel):
     content: Content = Field(..., description="Content details")
     image_control: ImageControl = Field(..., description="Image generation control settings")
     platforms: List[Platform] = Field(..., description="Platform configurations")
-    
+
     # Optional: Keep compatibility fields for transition
     language: str = Field(default="English", description="Target language for content")
     upload_to_cloud: bool = Field(default=True, description="Whether to upload to cloud storage")
+    image_generation_model: Optional[str] = Field(
+        default=None,
+        description="Optional: Specify image generation model (e.g., 'imagen-4.0-fast-generate-001'). If not provided, uses default from config."
+    )
 
 
 class PipelineRequest(BaseModel):
@@ -127,6 +131,11 @@ class PipelineRequest(BaseModel):
     upload_to_cloud: bool = Field(
         default=True,
         description="Flag to indicate whether generated assets should be uploaded to cloud storage."
+    )
+    image_generation_model: Optional[str] = Field(
+        default=None,
+        description="Optional: Specify image generation model (e.g., 'imagen-4.0-fast-generate-001'). If not provided, uses default from config.",
+        json_schema_extra={"example": "imagen-4.0-fast-generate-001"}
     )
 
     # You can also provide an example for the whole model

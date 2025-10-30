@@ -119,6 +119,57 @@ class ImageControlProcessor:
             return None
     
     @staticmethod
+    def sanitize_prompt_for_image_generation(prompt: str) -> str:
+        """
+        Sanitizes a prompt to prevent the image model from rendering instruction-like
+        text or quoted phrases as overlays on the image.
+
+        This function removes problematic patterns that models might misinterpret as
+        text to be rendered on the image, such as:
+        - Quoted phrases like 'for good' or "save the planet"
+        - Instructional phrases like "emphasizing the X aspect"
+        - Meta-commentary about what to convey
+
+        Args:
+            prompt: The raw prompt to sanitize
+
+        Returns:
+            str: Sanitized prompt with problematic patterns removed or transformed
+        """
+        import re
+
+        # Remove common problematic instruction patterns
+        problematic_patterns = [
+            # Remove "emphasizing the 'X' aspect" or "highlighting the 'X' theme"
+            r"emphasizing the ['\"][^'\"]+['\"] (aspect|theme|concept|message)",
+            r"highlighting the ['\"][^'\"]+['\"] (aspect|theme|concept|message)",
+            r"conveying (the message of |a sense of )?['\"][^'\"]+['\"]",
+            r"with (the|a) ['\"][^'\"]+['\"] (feel|vibe|message|theme)",
+
+            # Remove standalone quoted phrases that might be misinterpreted as text overlays
+            # But be careful not to remove quotes that are part of legitimate descriptions
+            r"emphasizing ['\"][^'\"]+['\"]",
+            r"the ['\"][^'\"]+['\"] (aspect|element|feeling|theme|concept)",
+        ]
+
+        sanitized = prompt
+        for pattern in problematic_patterns:
+            sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE)
+
+        # Clean up any double spaces or punctuation issues created by removals
+        sanitized = re.sub(r'\s+', ' ', sanitized)  # Multiple spaces to single space
+        sanitized = re.sub(r'\s*\.\s*\.', '.', sanitized)  # Double periods
+        sanitized = re.sub(r',\s*,', ',', sanitized)  # Double commas
+        sanitized = sanitized.strip()
+
+        if sanitized != prompt:
+            logger.info(f"Sanitized prompt - removed instruction-like text that could be misinterpreted")
+            logger.debug(f"Original: {prompt[:100]}...")
+            logger.debug(f"Sanitized: {sanitized[:100]}...")
+
+        return sanitized
+
+    @staticmethod
     def enhance_prompt_with_image_controls(
         base_prompt: str,
         effective_control: EffectiveImageControl,
@@ -136,9 +187,13 @@ class ImageControlProcessor:
             str: Enhanced prompt with image control instructions
         """
         if not effective_control.enabled:
-            return base_prompt
+            # Still sanitize even if controls are not enabled
+            return ImageControlProcessor.sanitize_prompt_for_image_generation(base_prompt)
 
-        enhanced_prompt = base_prompt
+        # First, sanitize the base prompt to remove problematic instruction-like text
+        sanitized_prompt = ImageControlProcessor.sanitize_prompt_for_image_generation(base_prompt)
+
+        enhanced_prompt = sanitized_prompt
 
         # CRITICAL: Add explicit instruction to NOT include text/captions/labels in the image
         enhanced_prompt += ". IMPORTANT: Create a clean visual design without any text, captions, labels, or written words in the image"

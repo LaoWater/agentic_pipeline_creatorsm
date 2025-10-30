@@ -15,6 +15,9 @@ from google.genai.types import GenerateImagesConfig
 from PIL import Image
 from dotenv import dotenv_values
 
+# Import centralized model config
+from config import IMAGE_GENERATION_MODEL
+
 # --- Setup Logging ---
 logger = logging.getLogger(__name__)
 
@@ -75,7 +78,7 @@ def generate_and_save_image_google(
         output_directory: str,
         filename_base: str,
         file_extension: str = "png",
-        model_name: str = "imagen-4.0-fast-generate-001",  # Default Google Imagen model
+        model_name: str = IMAGE_GENERATION_MODEL,  # Centralized model config from config.py
         image_config: Optional[Dict[str, Any]] = None
 ) -> str:
     """
@@ -189,7 +192,7 @@ if __name__ == "__main__":
             output_directory=test_output_dir,
             filename_base=test_filename,
             file_extension="png",
-            model_name="imagen-3.0-generate-002"
+            model_name=IMAGE_GENERATION_MODEL  # Using centralized model config
         )
         logger.info(f"✅ Google Imagen Test successful! Image saved to: {result_path}")
     except ValueError as ve:
