@@ -53,7 +53,7 @@ async def generate_visual_asset_for_platform(
         Exception: If image generation fails (e.g., API key issue, API error).
     """
     logger.info(f"\n🖼️ Media Generation Task: Starting for '{filename_base}' in '{output_directory}' using Google Imagen.")
-    logger.info(f"🖼️ Media Generation Task: Using prompt: '{image_prompt[:100]}...' with model '{model}'")
+    logger.info(f"🖼️ Media Generation Task: Using prompt: '{image_prompt}...' with model '{model}'")
 
     if media_type == "image":
         try:

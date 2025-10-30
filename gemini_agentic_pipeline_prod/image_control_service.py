@@ -126,43 +126,85 @@ class ImageControlProcessor:
     ) -> str:
         """
         Enhances the base image generation prompt with image control settings.
-        
+
         Args:
             base_prompt: The original prompt from the LLM
             effective_control: The resolved image control settings
             company_colors: Dictionary with primary_color_1 and primary_color_2
-            
+
         Returns:
             str: Enhanced prompt with image control instructions
         """
         if not effective_control.enabled:
             return base_prompt
-        
+
         enhanced_prompt = base_prompt
-        
+
+        # CRITICAL: Add explicit instruction to NOT include text/captions/labels in the image
+        enhanced_prompt += ". IMPORTANT: Create a clean visual design without any text, captions, labels, or written words in the image"
+
         # Add style guidance
         if effective_control.style:
-            enhanced_prompt += f". Style: {effective_control.style}"
-        
+            enhanced_prompt += f". Visual style: {effective_control.style}"
+
         # Add specific guidance
         if effective_control.guidance:
-            enhanced_prompt += f". Additional guidance: {effective_control.guidance}"
-        
-        # Add caption context if provided
-        if effective_control.caption:
-            enhanced_prompt += f". Caption context: {effective_control.caption}"
-        
-        # Add company colors if available
+            enhanced_prompt += f". Creative direction: {effective_control.guidance}"
+
+        # REMOVED: Caption is NOT added to prompt - captions should be post-generation metadata
+        # Captions being in the prompt cause the AI to render them as text on the image
+
+        # Add company colors in natural language (NOT hex codes or technical specifications)
         if company_colors:
-            color_instruction = f". Use brand colors: primary {company_colors.get('primary_color_1', '')}, secondary {company_colors.get('primary_color_2', '')}"
-            enhanced_prompt += color_instruction
-        
-        # Add aspect ratio instruction
-        if effective_control.ratio:
-            enhanced_prompt += f". Aspect ratio: {effective_control.ratio}"
-        
+            primary = company_colors.get('primary_color_1', '')
+            secondary = company_colors.get('primary_color_2', '')
+
+            # Convert color codes to natural language if they appear to be hex codes
+            color_desc = self._describe_brand_colors(primary, secondary)
+            if color_desc:
+                enhanced_prompt += f". {color_desc}"
+
+        # Add aspect ratio as a composition guide (not as text to render)
+        if effective_control.ratio and effective_control.ratio != "auto":
+            enhanced_prompt += f". Compose for {effective_control.ratio} aspect ratio"
+
         logger.info(f"Enhanced prompt: {enhanced_prompt[:200]}...")
         return enhanced_prompt
+
+    @staticmethod
+    def _describe_brand_colors(primary: str, secondary: str) -> str:
+        """
+        Converts color specifications into natural language descriptions for the AI.
+        This prevents hex codes from being rendered as text on images.
+
+        Args:
+            primary: Primary color (hex code or color name)
+            secondary: Secondary color (hex code or color name)
+
+        Returns:
+            str: Natural language color palette description
+        """
+        if not primary and not secondary:
+            return ""
+
+        # If colors are provided, describe them in a way that guides the AI's palette
+        # without technical specifications that might be rendered as text
+        color_parts = []
+
+        if primary:
+            # Check if it's a hex code
+            if primary.startswith('#'):
+                color_parts.append(f"incorporate the brand's primary color tone")
+            else:
+                color_parts.append(f"feature {primary} tones")
+
+        if secondary:
+            if secondary.startswith('#'):
+                color_parts.append(f"with complementary accent colors")
+            else:
+                color_parts.append(f"complemented by {secondary}")
+
+        return f"Color palette: {' '.join(color_parts)}"
     
     @staticmethod
     def get_image_generation_config(

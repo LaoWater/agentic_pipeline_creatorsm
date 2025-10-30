@@ -463,19 +463,44 @@ async def generate_enhanced_social_media_posts_pipeline(
     # --- Enhanced Platform Adaptation with Image Controls ---
     platform_outputs_map = {}
     platforms_needing_media_info = []
-    
+
     for platform in selected_platforms:
         platform_name = platform.platform
         print(f"⚙️ Processing enhanced adaptation for {platform_name}")
-        
-        # Resolve effective image control for this platform
-        effective_control = ImageControlProcessor.resolve_effective_image_control(
-            image_control, platform_name
-        )
-        
-        # Download starting image if provided
+
+        # STEP 1: DETERMINE EFFECTIVE IMAGE CONTROL (if-else logic)
+        # This pre-processes which level applies BEFORE calling the LLM
+        effective_control = None
+        control_level_used = "none"
+
+        # Check Level 2 (platform-specific) first
+        level_2 = image_control.level_2
+        platform_level_2 = None
+        if level_2:
+            platform_level_2 = getattr(level_2, platform_name, None)
+
+        if platform_level_2 and platform_level_2.enabled:
+            # USE LEVEL 2 - Platform-specific override
+            effective_control = ImageControlProcessor.resolve_effective_image_control(
+                image_control, platform_name
+            )
+            control_level_used = "level_2"
+            print(f"  ✓ Using Level 2 (platform-specific) image control for {platform_name}")
+        elif image_control.level_1.enabled:
+            # USE LEVEL 1 - Global settings
+            effective_control = ImageControlProcessor.resolve_effective_image_control(
+                image_control, platform_name
+            )
+            control_level_used = "level_1"
+            print(f"  ✓ Using Level 1 (global) image control for {platform_name}")
+        else:
+            # NO IMAGE CONTROL - AI decides everything
+            control_level_used = "none"
+            print(f"  ○ No image control applied for {platform_name} - AI will use defaults")
+
+        # STEP 2: DOWNLOAD STARTING IMAGE IF PROVIDED
         starting_image_path = None
-        if effective_control.starting_image_url:
+        if effective_control and effective_control.starting_image_url:
             platform_dir = ensure_platform_folder_exists(BASE_OUTPUT_FOLDER, platform_name)
             starting_image_path = await ImageControlProcessor.download_starting_image(
                 effective_control.starting_image_url,
@@ -484,8 +509,56 @@ async def generate_enhanced_social_media_posts_pipeline(
             )
             if starting_image_path:
                 effective_control.starting_image_path = starting_image_path
-        
-        # Run platform adaptation
+                print(f"  ✓ Downloaded starting image for {platform_name}")
+
+        # STEP 3: BUILD CLEAR, SPECIFIC IMAGE INSTRUCTIONS FOR LLM
+        # Instead of making the LLM decide, we tell it EXACTLY what to do
+        image_generation_instructions = None
+        if effective_control and effective_control.enabled and platform.post_type in ["Image", "Video"]:
+            instructions_parts = []
+
+            # CRITICAL: Explicitly instruct NO text/captions in the image
+            instructions_parts.append("IMPORTANT: Create a clean visual design without any text, captions, labels, or written words in the image")
+
+            # Style instruction
+            if effective_control.style:
+                instructions_parts.append(f"Visual style: {effective_control.style}")
+
+            # Visual guidance
+            if effective_control.guidance:
+                instructions_parts.append(f"Creative direction: {effective_control.guidance}")
+
+            # Aspect ratio
+            if effective_control.ratio and effective_control.ratio != "auto":
+                instructions_parts.append(f"Compose for {effective_control.ratio} aspect ratio")
+
+            # Brand colors - use natural language instead of hex codes
+            # Convert technical color specs to descriptive language to prevent rendering as text
+            color_desc_parts = []
+            if company.primary_color_1:
+                if company.primary_color_1.startswith('#'):
+                    color_desc_parts.append("incorporate the brand's primary color palette")
+                else:
+                    color_desc_parts.append(f"feature {company.primary_color_1} tones")
+
+            if company.primary_color_2:
+                if company.primary_color_2.startswith('#'):
+                    color_desc_parts.append("with complementary brand accent colors")
+                else:
+                    color_desc_parts.append(f"with {company.primary_color_2} accents")
+
+            if color_desc_parts:
+                instructions_parts.append(f"Color palette: {' '.join(color_desc_parts)}")
+
+            # Starting image context
+            if starting_image_path:
+                instructions_parts.append(f"Use starting image as compositional base")
+
+            # Combine into clear instructions
+            image_generation_instructions = ". ".join(instructions_parts)
+            print(f"  ✓ Image instructions for {platform_name}: {image_generation_instructions[:100]}...")
+
+        # STEP 4: RUN PLATFORM ADAPTATION WITH CLEAR INSTRUCTIONS
         platform_agent_input = PlatformAgentInput(
             company_name=company.name,
             company_mission=company.mission,
@@ -497,47 +570,69 @@ async def generate_enhanced_social_media_posts_pipeline(
             language=request_data.language,
             tone=company.tone_of_voice
         )
-        
+
         platform_result = await run_platform_adaptation_agent(platform_agent_input)
-        
-        # Enhance media prompt with image controls if media is needed
+
+        # STEP 5: ENHANCE MEDIA PROMPT WITH PRE-DETERMINED INSTRUCTIONS
+        # Now the LLM receives CLEAR, SPECIFIC instructions, not ambiguous controls
         original_media_prompt = platform_result.get("platform_media_generation_prompt")
-        if original_media_prompt and effective_control.enabled:
-            enhanced_prompt = ImageControlProcessor.enhance_prompt_with_image_controls(
-                original_media_prompt,
-                effective_control,
-                company_colors
-            )
+        if original_media_prompt and image_generation_instructions:
+            # Append our clear instructions to the LLM's base prompt
+            enhanced_prompt = f"{original_media_prompt}. {image_generation_instructions}"
             platform_result["platform_media_generation_prompt"] = enhanced_prompt
-            print(f"🎨 Enhanced media prompt for {platform_name}")
-        
+            print(f"  ✓ Enhanced media prompt for {platform_name} with {control_level_used} controls")
+        elif original_media_prompt:
+            print(f"  ○ Using default media prompt for {platform_name} (no image controls)")
+
+        # STEP 6: TRANSLATION (if needed)
+        # Critical fix: Translate platform-specific text if language is not English
+        if request_data.language.lower() not in ["english", "en"]:
+            original_english_text = platform_result["platform_specific_text"]
+            print(f"🌍 Translating content for {platform_name} from English to {request_data.language}...")
+            translator_input = TranslatorAgentInput(
+                text_to_translate=original_english_text,
+                target_language=request_data.language,
+                company_name=company.name,
+                company_mission=company.mission,
+                original_subject=content.topic
+            )
+            try:
+                translation_output = await run_translator_agent(translator_input)
+                platform_result["platform_specific_text"] = translation_output["translated_text"]
+                print(f"✅ Translation successful for {platform_name}.")
+            except Exception as e:
+                print(f"🚨 Error translating content for {platform_name} to {request_data.language}: {e}. Using original English text.")
+                # platform_result["platform_specific_text"] remains original_english_text
+
         platform_outputs_map[platform_name] = platform_result
-        
-        # Track platforms needing media
+
+        # STEP 7: TRACK PLATFORMS NEEDING MEDIA
         if original_media_prompt:
+            media_type = "video" if platform.post_type == "Video" else "image"
             platforms_needing_media_info.append((
                 platform_name,
                 platform_result["platform_media_generation_prompt"],
-                "image"  # Default to image for now
+                media_type,
+                effective_control  # Pass the effective control for generation config
             ))
     
     # --- Enhanced Media Generation ---
     generated_media_paths = []
     if platforms_needing_media_info:
         print(f"\n🎨 Generating {len(platforms_needing_media_info)} enhanced media assets...")
-        
+
         media_generation_tasks = []
-        for platform_name, enhanced_prompt, media_type in platforms_needing_media_info:
+        for platform_name, enhanced_prompt, media_type, effective_control in platforms_needing_media_info:
             platform_dir = ensure_platform_folder_exists(BASE_OUTPUT_FOLDER, platform_name)
-            
-            # Get effective control for additional config
-            effective_control = ImageControlProcessor.resolve_effective_image_control(
-                image_control, platform_name
-            )
-            
-            # Generate config for image generation
-            image_config = ImageControlProcessor.get_image_generation_config(effective_control)
-            
+
+            # Generate config for image generation using the pre-determined effective control
+            image_config = {}
+            if effective_control:
+                image_config = ImageControlProcessor.get_image_generation_config(effective_control)
+                print(f"  ✓ Using image config for {platform_name}: {image_config}")
+
+            # The enhanced_prompt already contains all the clear instructions
+            # Now just generate the media with those instructions
             task = generate_visual_asset_for_platform(
                 image_prompt=enhanced_prompt,
                 output_directory=platform_dir,
@@ -546,10 +641,11 @@ async def generate_enhanced_social_media_posts_pipeline(
                 image_config=image_config  # Pass the generated config
             )
             media_generation_tasks.append(task)
-        
+
         try:
-            generated_media_paths = await asyncio.gather(*media_generation_tasks)
-            print(f"✅ Generated {len([p for p in generated_media_paths if p])} media assets successfully")
+            generated_media_paths = await asyncio.gather(*media_generation_tasks, return_exceptions=True)
+            successful_count = len([p for p in generated_media_paths if p and not isinstance(p, Exception)])
+            print(f"✅ Generated {successful_count}/{len(platforms_needing_media_info)} media assets successfully")
         except Exception as e:
             print(f"🚨 Error during media generation: {e}")
             generated_media_paths = [None] * len(platforms_needing_media_info)
@@ -586,13 +682,18 @@ async def generate_enhanced_social_media_posts_pipeline(
         media_info = next((info for info in platforms_needing_media_info if info[0] == platform_name), None)
         if media_info and media_path_idx < len(generated_media_paths):
             path_or_none = generated_media_paths[media_path_idx]
-            if path_or_none:
+            # Handle both successful paths and exceptions from gather
+            if path_or_none and not isinstance(path_or_none, Exception):
                 media_file_path = path_or_none
+                # media_info is now (platform_name, prompt, media_type, effective_control)
+                media_type_used = media_info[2]  # Get media_type from tuple
                 current_media_asset = SavedMediaAsset(
-                    type="image",
+                    type=media_type_used,
                     file_path=media_file_path
                 )
                 media_prompt_used = media_info[1]
+            elif isinstance(path_or_none, Exception):
+                print(f"  ⚠️ Media generation failed for {platform_name}: {path_or_none}")
             media_path_idx += 1
         
         # Cloud upload
