@@ -588,16 +588,23 @@ async def generate_enhanced_social_media_posts_pipeline(
 
         platform_result = await run_platform_adaptation_agent(platform_agent_input)
 
-        # STEP 5: ENHANCE MEDIA PROMPT WITH PRE-DETERMINED INSTRUCTIONS
-        # Now the LLM receives CLEAR, SPECIFIC instructions, not ambiguous controls
+        # STEP 5: SANITIZE AND ENHANCE MEDIA PROMPT WITH PRE-DETERMINED INSTRUCTIONS
+        # First sanitize to remove instruction-like text that could be misinterpreted as overlay text
+        # Then append our clear instructions to the LLM's base prompt
         original_media_prompt = platform_result.get("platform_media_generation_prompt")
-        if original_media_prompt and image_generation_instructions:
-            # Append our clear instructions to the LLM's base prompt
-            enhanced_prompt = f"{original_media_prompt}. {image_generation_instructions}"
-            platform_result["platform_media_generation_prompt"] = enhanced_prompt
-            print(f"  ✓ Enhanced media prompt for {platform_name} with {control_level_used} controls")
-        elif original_media_prompt:
-            print(f"  ○ Using default media prompt for {platform_name} (no image controls)")
+        if original_media_prompt:
+            # Sanitize the LLM-generated prompt to remove problematic instruction phrases
+            sanitized_prompt = ImageControlProcessor.sanitize_prompt_for_image_generation(original_media_prompt)
+
+            if image_generation_instructions:
+                # Append our clear instructions to the sanitized base prompt
+                enhanced_prompt = f"{sanitized_prompt}. {image_generation_instructions}"
+                platform_result["platform_media_generation_prompt"] = enhanced_prompt
+                print(f"  ✓ Sanitized and enhanced media prompt for {platform_name} with {control_level_used} controls")
+            else:
+                # Even without image controls, use the sanitized prompt
+                platform_result["platform_media_generation_prompt"] = sanitized_prompt
+                print(f"  ✓ Sanitized media prompt for {platform_name} (no image controls)")
 
         # Store platform result WITHOUT translation (translation happens later as final layer)
         platform_outputs_map[platform_name] = platform_result
