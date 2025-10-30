@@ -219,10 +219,9 @@ class ImageControlProcessor:
             if color_desc:
                 enhanced_prompt += f". {color_desc}"
 
-        # Add aspect ratio as a composition guide (not as text to render)
+        # Aspect ratio is NOT added to prompt - it's passed as a parameter to the model
+        # The ratio will be extracted by get_image_generation_config() and passed via image_config
         # Valid ratios: "1:1", "3:4", "4:3", "9:16", "16:9" (Google Imagen supported values only)
-        if effective_control.ratio:
-            enhanced_prompt += f". Compose for {effective_control.ratio} aspect ratio"
 
         logger.info(f"Enhanced prompt: {enhanced_prompt[:200]}...")
         return enhanced_prompt
