@@ -54,92 +54,6 @@ All HTTP methods and headers are allowed.
 
 ## Endpoints
 
-### POST /generate-posts
-
-**Description:** Original pipeline endpoint for basic social media post generation.
-
-**Endpoint:** `/generate-posts`
-**Method:** `POST`
-**Content-Type:** `application/json`
-
-#### Request Body Schema
-
-```typescript
-{
-  company_name: string;                              // Required
-  company_mission: string;                           // Required
-  company_sentiment: string;                         // Required
-  subject: string;                                   // Required
-  language?: string;                                 // Optional, default: "English"
-  tone?: string;                                     // Optional, default: "Neutral"
-  platforms_post_types_map: Array<{                  // Required
-    [platform: string]: string;                      // platform: "Text" | "Image" | "Video" | "Let Model Decide"
-  }>;
-  requirements?: Array<{                             // Optional
-    type: string;
-    detail: string;
-  }>;
-  posts_history?: Array<{                            // Optional
-    platform: string;
-    text: string;
-  }>;
-  upload_to_cloud?: boolean;                         // Optional, default: true
-  image_generation_model?: string;                   // Optional, e.g., "imagen-4.0-fast-generate-001"
-}
-```
-
-#### Field Descriptions
-
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `company_name` | string | Yes | - | Company name for content generation |
-| `company_mission` | string | Yes | - | Company mission statement |
-| `company_sentiment` | string | Yes | - | Desired brand voice and sentiment (e.g., "Inspirational & Empowering") |
-| `subject` | string | Yes | - | Main topic for the social media posts |
-| `language` | string | No | "English" | Target language for generated content |
-| `tone` | string | No | "Neutral" | Desired tone (e.g., "Excited and Optimistic") |
-| `platforms_post_types_map` | array | Yes | - | Array of platform configurations |
-| `requirements` | array | No | null | Specific content requirements |
-| `posts_history` | array | No | null | Previous posts for context |
-| `upload_to_cloud` | boolean | No | true | Whether to upload assets to cloud storage |
-| `image_generation_model` | string | No | null | Custom image model (see [Image Model Selection](#image-generation-model-selection)) |
-
-#### Platform Post Types
-
-Valid post type values:
-- `"Text"` - Text-only post
-- `"Image"` - Post with image
-- `"Video"` - Post with video
-- `"Let Model Decide"` - AI decides based on content
-
-#### Example Request
-
-```json
-{
-  "company_name": "Tech Innovators Inc.",
-  "company_mission": "To boldly innovate where no tech has innovated before.",
-  "company_sentiment": "Futuristic and bold, slightly playful.",
-  "subject": "Announcing our new Quantum Entanglement Communicator!",
-  "language": "English",
-  "tone": "Excited and Awe-Inspiring",
-  "platforms_post_types_map": [
-    {"linkedin": "Image"},
-    {"twitter": "Text"},
-    {"instagram": "Image"}
-  ],
-  "requirements": [
-    {
-      "type": "Call to Action",
-      "detail": "Encourage users to visit our website for a demo."
-    }
-  ],
-  "upload_to_cloud": true,
-  "image_generation_model": "imagen-4.0-fast-generate-001"
-}
-```
-
----
-
 ### POST /generate-posts-enhanced
 
 **Description:** Enhanced pipeline with hierarchical image controls and advanced styling options.
@@ -173,7 +87,7 @@ Valid post type values:
       style: string;                                // Required (e.g., "minimalist", "vibrant")
       guidance: string;                             // Required (creative direction)
       caption: string;                              // Required
-      ratio: string;                                // Required (e.g., "1:1", "16:9", "4:5")
+      ratio: string;                                // Required: "1:1" | "3:4" | "4:3" | "9:16" | "16:9"
       starting_image_url?: string;                  // Optional
     };
     level_2: {                                      // Platform-specific overrides
@@ -215,13 +129,17 @@ Valid post type values:
 
 #### Aspect Ratio Values
 
-Common aspect ratios:
-- `"1:1"` - Square (Instagram posts, LinkedIn carousel)
-- `"4:5"` - Portrait (Instagram feed)
-- `"16:9"` - Landscape (LinkedIn posts, YouTube thumbnails)
+**IMPORTANT:** Only use Google Imagen's supported aspect ratios:
+
+- `"1:1"` - Square (Instagram posts, general use)
+- `"3:4"` - Portrait (Instagram feed)
+- `"4:3"` - Landscape (General landscape)
 - `"9:16"` - Vertical (Stories, Reels, TikTok)
-- `"1.91:1"` - Wide (LinkedIn headers)
-- `"auto"` - Let the model decide
+- `"16:9"` - Wide landscape (YouTube thumbnails, LinkedIn)
+
+**Supported values:** `"1:1"`, `"3:4"`, `"4:3"`, `"9:16"`, `"16:9"`
+
+**Note:** Do NOT use `"auto"`, `"1.91:1"`, `"4:5"`, or any other ratios. Google Imagen only supports the five ratios listed above.
 
 #### Example Request
 
@@ -257,7 +175,7 @@ Common aspect ratios:
         "style": "vibrant and eye-catching",
         "guidance": "Use bold colors and dynamic composition",
         "caption": "Eco-innovation at your fingertips",
-        "ratio": "4:5",
+        "ratio": "3:4",
         "starting_image_url": null
       },
       "linkedin": {
@@ -265,7 +183,7 @@ Common aspect ratios:
         "style": "professional and polished",
         "guidance": "Emphasize technology and innovation",
         "caption": "Engineering a sustainable future",
-        "ratio": "1.91:1",
+        "ratio": "16:9",
         "starting_image_url": null
       }
     }

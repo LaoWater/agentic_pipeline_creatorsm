@@ -553,8 +553,8 @@ async def generate_enhanced_social_media_posts_pipeline(
             if effective_control.guidance:
                 instructions_parts.append(f"Creative direction: {effective_control.guidance}")
 
-            # Aspect ratio
-            if effective_control.ratio and effective_control.ratio != "auto":
+            # Aspect ratio - Valid values: "1:1", "3:4", "4:3", "9:16", "16:9"
+            if effective_control.ratio:
                 instructions_parts.append(f"Compose for {effective_control.ratio} aspect ratio")
 
             # Brand colors - use natural language instead of hex codes
