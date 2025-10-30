@@ -135,7 +135,7 @@ Instagram Specific Guidelines:
 -   Tone: Engaging, friendly, authentic, visually descriptive. "{company_sentiment}".
 -   Hashtags: Use 5-10 relevant hashtags. Mix popular and niche. Include #{company_name_no_spaces}.
 -   Media:
-    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio square 1:1 or portrait 3:4. Emphasize "{company_sentiment}".
+    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}.".
     -   CRITICAL: The media prompt must describe ONLY visual elements (scenes, objects, colors, composition, style). Do NOT include text, captions, labels, words, hashtags, or technical specifications (like hex codes) in the media prompt.
     -   If `platform_post_type` is "Text": The `platform_media_generation_prompt` must be null.
     -   If `platform_post_type` is `Let Model Decide`, you will decide type of post based on subject and your working platform. (Text, Photo) - then adhere `platform_media_generation_prompt` according to this decision.
@@ -163,7 +163,7 @@ Required Post Format for Twitter (X): {platform_post_type}
 
 
 Twitter (X) Specific Guidelines:
--   Tone: Conversational, direct, encouraging. "{company_sentiment}" adapted for brevity.
+-   Tone: Conversational, direct, encouraging.
 -   Length: Max 280 characters.
 -   Hashtags: Use 1-3 highly relevant hashtags (e.g., #{company_name_no_spaces}).
 -   Media:
@@ -194,10 +194,10 @@ Core Post Text Suggestion from Strategist: {core_post_text_suggestion}
 Required Post Format for Facebook: {platform_post_type}
 
 Facebook Specific Guidelines:
--   Tone: Friendly, approachable, informative, community-oriented. "{company_sentiment}" should be evident.
+-   Tone: Friendly, approachable, informative, community-oriented. 
 -   Hashtags: Use 1-3 relevant hashtags (e.g., #{company_name_no_spaces}).
 -   Media:
-    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio 16:9 (landscape) or 1:1 (square). Emphasize "{company_sentiment}".
+    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}.
     -   CRITICAL: The media prompt must describe ONLY visual elements (scenes, objects, colors, composition, style). Do NOT include text, captions, labels, words, hashtags, or technical specifications (like hex codes) in the media prompt.
     -   If `platform_post_type` is "Text": The `platform_media_generation_prompt` must be null.
     -   If `platform_post_type` is `Let Model Decide`, you will decide type of post based on subject and your working platform. (Text, Photo) - then adhere `platform_media_generation_prompt` according to this decision.
