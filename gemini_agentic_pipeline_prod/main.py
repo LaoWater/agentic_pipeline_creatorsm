@@ -66,7 +66,8 @@ async def run_pipeline_background(request_data: PipelineRequest):
             tone=request_data.tone,
             requirements=requirements_dict,  # Pass the converted dict
             posts_history=posts_history_dict,  # Pass the converted dict
-            upload_to_cloud=request_data.upload_to_cloud
+            upload_to_cloud=request_data.upload_to_cloud,
+            image_generation_model=request_data.image_generation_model  # Pass custom model if provided
         )
         print(
             f"Pipeline completed for company: {request_data.company_name}, subject: {request_data.subject}. Result ID: {result.get('pipeline_id')}")

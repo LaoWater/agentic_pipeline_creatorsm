@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 
 
-from config import BASE_OUTPUT_FOLDER # BASE_OUTPUT_FOLDER can remain if it's a fixed path in the container
+from config import BASE_OUTPUT_FOLDER, IMAGE_GENERATION_MODEL  # BASE_OUTPUT_FOLDER can remain if it's a fixed path in the container
 
 from data_models import (
     Layer2Input, PostHistoryEntry, Requirements,
@@ -34,11 +34,16 @@ async def generate_social_media_posts_pipeline(
     requirements: Optional[Requirements] = None,
     posts_history: Optional[List[PostHistoryEntry]] = None,
     upload_to_cloud: bool = True,
+    image_generation_model: Optional[str] = None,  # Optional: custom model from frontend
 ) -> Dict[str, any]:
     """
     Generate social media posts, translate if necessary, and optionally upload to cloud storage.
     """
     print("🚀 Starting Social Media Post Generation Pipeline 🚀")
+
+    # --- Determine image generation model to use ---
+    model_to_use = image_generation_model if image_generation_model else IMAGE_GENERATION_MODEL
+    print(f"🎨 Using image generation model: {model_to_use}")
 
     # --- Derive target platforms from the map ---
     platform_configs: Dict[str, str] = {}
@@ -186,7 +191,8 @@ async def generate_social_media_posts_pipeline(
                         image_prompt=media_prompt,
                         output_directory=platform_dir,
                         filename_base=filename_base,
-                        media_type=media_type_to_generate
+                        media_type=media_type_to_generate,
+                        model=model_to_use  # Use model from frontend or config default
                     )
                 )
                 platforms_needing_media_info.append((platform_name, media_prompt, media_type_to_generate))
@@ -420,13 +426,17 @@ async def generate_enhanced_social_media_posts_pipeline(
     Supports hierarchical image control (Level 1 global, Level 2 platform-specific).
     """
     print("🚀 Starting Enhanced Social Media Post Generation Pipeline 🚀")
-    
+
     # Extract data from the new structure
     company = request_data.company
     content = request_data.content
     image_control = request_data.image_control
     platforms = request_data.platforms
-    
+
+    # --- Determine image generation model to use ---
+    model_to_use = request_data.image_generation_model if request_data.image_generation_model else IMAGE_GENERATION_MODEL
+    print(f"🎨 Using image generation model: {model_to_use}")
+
     # Filter selected platforms
     selected_platforms = [p for p in platforms if p.selected]
     if not selected_platforms:
@@ -676,7 +686,8 @@ async def generate_enhanced_social_media_posts_pipeline(
                 output_directory=platform_dir,
                 filename_base=filename_base,
                 media_type=media_type,
-                image_config=image_config  # Pass the generated config
+                image_config=image_config,  # Pass the generated config
+                model=model_to_use  # Use model from frontend or config default
             )
             media_generation_tasks.append(task)
 
