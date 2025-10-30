@@ -638,8 +638,7 @@ async def generate_enhanced_social_media_posts_pipeline(
                 output_directory=platform_dir,
                 filename_base=filename_base,
                 media_type=media_type,
-                # Pass additional config if the generation function supports it
-                # image_config=image_config  # Uncomment if generate_visual_asset_for_platform accepts this
+                image_config=image_config  # Pass the generated config
             )
             media_generation_tasks.append(task)
 

@@ -14,7 +14,7 @@ $GCS_BUCKET_NAME_FOR_APP = "creatorsm-media-bucket" # Bucket your app uses
 # --- One-time Setup Steps (copy and paste each line if not done) * ONly one time---
 # 1. Create Artifact Registry Repo (if it doesn't exist in this region/project)
 gcloud artifacts repositories create $AR_REPO --repository-format=docker --location=$REGION --description="Docker repository for my applications" --project $PROJECT_ID
-# 2. Grant Logs Writer Permission to Cloud Build SA (fix for your error)
+# 2. Grant Logs Writer Permission to Cloud Build SA (fix for prev error)
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$BUILD_SA" --role="roles/logging.logWriter" --condition=None
 
 
@@ -32,7 +32,6 @@ gcloud run deploy $SERVICE_NAME --image $AR_IMAGE_PATH --platform managed --regi
 
 # If you have secrets or environment variables set on the service, you might need to re-add them. Example for a secret:
 # gcloud run deploy $SERVICE_NAME --image $AR_IMAGE_PATH --platform managed --region $REGION --allow-unauthenticated --port 8000 --project $PROJECT_ID --update-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest
-
 
 
 

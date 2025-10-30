@@ -40,6 +40,8 @@ else:
     print(f"RUNNING IN DOKCER: False, BASE_OUTPUT_FOLDER: {BASE_OUTPUT_FOLDER}")
 
 
+IMAGE_FILE_EXTENSION = "png"  # Can be moved to config.py if needed
+
 
 
 

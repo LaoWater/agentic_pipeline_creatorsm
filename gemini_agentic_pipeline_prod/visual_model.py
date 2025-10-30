@@ -4,10 +4,14 @@ import os
 from pathlib import Path
 from io import BytesIO
 import logging
+from typing import Optional, Dict, Any
+
 
 # --- Google Imagen Imports ---
 from google import genai
 from google.genai import types
+from google.api_core import exceptions as google_exceptions
+from google.genai.types import GenerateImagesConfig
 from PIL import Image
 from dotenv import dotenv_values
 
@@ -71,7 +75,8 @@ def generate_and_save_image_google(
         output_directory: str,
         filename_base: str,
         file_extension: str = "png",
-        model_name: str = "imagen-3.0-generate-002",  # Default Google Imagen model
+        model_name: str = "imagen-4.0-fast-generate-001",  # Default Google Imagen model
+        image_config: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Generates an image using a specified Google Imagen model and saves it.
@@ -83,6 +88,7 @@ def generate_and_save_image_google(
         filename_base: Base filename (without extension) for the generated asset.
         file_extension: File extension for the generated image (e.g., "png", "jpg").
         model_name: The specific Google Imagen model to use.
+        image_config: Optional dictionary that specifies how the generated asset should be
 
     Returns:
         The file path where the image was saved.
@@ -101,12 +107,19 @@ def generate_and_save_image_google(
         f"🎨 [Google Imagen] Requesting image generation with model '{model_name}' for prompt: '{prompt[:100]}...'")
 
     try:
+        # Prepare image generation config
+        gen_config_args = {"number_of_images": 1}
+        if image_config and "aspect_ratio" in image_config:
+            aspect_ratio = image_config["aspect_ratio"]
+            # Validate aspect_ratio against allowed values if necessary
+            # For example: if aspect_ratio not in ["square", "portrait", "landscape"]: ...
+            gen_config_args["aspect_ratio"] = aspect_ratio
+            logger.info(f"🖼️ [Google Imagen] Using aspect ratio: {aspect_ratio}")
+
         response = client.models.generate_images(
             model=model_name,
             prompt=prompt,
-            config=types.GenerateImagesConfig(
-                number_of_images=1  # Generating one image per call
-            )
+            config=types.GenerateImagesConfig(**gen_config_args)
         )
 
         if not response.generated_images:
@@ -142,7 +155,7 @@ def generate_and_save_image_google(
         logger.info(f"🖼️ [Google Imagen] Image size: {len(image_bytes)} bytes")
         return str(file_path)
 
-    except types.GoogleAPIError as e:  # Catch Google specific API errors
+    except google_exceptions.GoogleAPICallError as e:  # Catch Google specific API errors
         error_msg = f"Google Imagen API error for '{filename_base}' (model '{model_name}'): {e}"
         logger.error(f"🚨 [Google Imagen] {error_msg}")
         raise Exception(error_msg) from e  # Preserve original exception context
