@@ -50,7 +50,7 @@ async def test_enhanced_pipeline():
                     style="Professional, clean, business-oriented",
                     guidance="Corporate and professional look suitable for LinkedIn",
                     caption="Professional announcement",
-                    ratio="1.91:1",
+                    ratio="16:9",  # Valid Google Imagen ratio
                     starting_image_url=None
                 )
             )

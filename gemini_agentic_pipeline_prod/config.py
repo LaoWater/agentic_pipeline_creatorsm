@@ -105,7 +105,7 @@ LinkedIn Specific Guidelines:
 -   Tone: Professional, insightful, authoritative, value-driven. Align with "{company_sentiment}".
 -   Hashtags: Use 3-5 relevant, professional hashtags. Consider #{company_name_no_spaces}.
 -   Media:
-    -   If `platform_post_type` is "Image" or "Video": Craft a `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio 1.91:1 or 1:1 (square for carousel).
+    -   If `platform_post_type` is "Image" or "Video": Craft a `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio 16:9 (landscape) or 1:1 (square).
     -   CRITICAL: The media prompt must describe ONLY visual elements (scenes, objects, colors, composition, style). Do NOT include text, captions, labels, words, hashtags, or technical specifications (like hex codes) in the media prompt.
     -   If `platform_post_type` is "Text": The `platform_media_generation_prompt` must be null.
     -   If `platform_post_type` is `Let Model Decide`, you will decide type of post based on subject and your working platform. (Text, Photo) - then adhere `platform_media_generation_prompt` according to this decision.
@@ -135,7 +135,7 @@ Instagram Specific Guidelines:
 -   Tone: Engaging, friendly, authentic, visually descriptive. "{company_sentiment}".
 -   Hashtags: Use 5-10 relevant hashtags. Mix popular and niche. Include #{company_name_no_spaces}.
 -   Media:
-    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio square 1:1 or portrait 4:5. Emphasize "{company_sentiment}".
+    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio square 1:1 or portrait 3:4. Emphasize "{company_sentiment}".
     -   CRITICAL: The media prompt must describe ONLY visual elements (scenes, objects, colors, composition, style). Do NOT include text, captions, labels, words, hashtags, or technical specifications (like hex codes) in the media prompt.
     -   If `platform_post_type` is "Text": The `platform_media_generation_prompt` must be null.
     -   If `platform_post_type` is `Let Model Decide`, you will decide type of post based on subject and your working platform. (Text, Photo) - then adhere `platform_media_generation_prompt` according to this decision.
@@ -197,7 +197,7 @@ Facebook Specific Guidelines:
 -   Tone: Friendly, approachable, informative, community-oriented. "{company_sentiment}" should be evident.
 -   Hashtags: Use 1-3 relevant hashtags (e.g., #{company_name_no_spaces}).
 -   Media:
-    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio 1.91:1 (landscape) or 1:1 (square). Emphasize "{company_sentiment}".
+    -   If `platform_post_type` is "Image" or "Video": Craft `platform_media_generation_prompt` for an {media_type_for_prompt}. Aspect ratio 16:9 (landscape) or 1:1 (square). Emphasize "{company_sentiment}".
     -   CRITICAL: The media prompt must describe ONLY visual elements (scenes, objects, colors, composition, style). Do NOT include text, captions, labels, words, hashtags, or technical specifications (like hex codes) in the media prompt.
     -   If `platform_post_type` is "Text": The `platform_media_generation_prompt` must be null.
     -   If `platform_post_type` is `Let Model Decide`, you will decide type of post based on subject and your working platform. (Text, Photo) - then adhere `platform_media_generation_prompt` according to this decision.
