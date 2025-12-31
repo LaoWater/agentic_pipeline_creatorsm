@@ -3,3 +3,5 @@ node_modules
 output_data_local
 __pycache__
 output/
+
+.DS_Store

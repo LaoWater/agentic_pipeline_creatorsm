@@ -1,0 +1,161 @@
+DEFAULT 2025-12-01T17:01:31.833227Z }
+DEFAULT 2025-12-01T17:01:31.833230Z ```
+DEFAULT 2025-12-01T17:01:31.833233Z --- End Raw LLM Response ---
+DEFAULT 2025-12-01T17:01:31.833358Z [INFO]
+DEFAULT 2025-12-01T17:01:31.833362Z --- Platform Agent (instagram): Cleaned LLM Response (for JSON parsing) ---
+DEFAULT 2025-12-01T17:01:31.833365Z {
+DEFAULT 2025-12-01T17:01:31.833372Z "platform_specific_text": "Hey future innovators! 👋 Ever feel like the world is speeding up? That's the AI revolution in full swing! 🚀 Latest AI models are growing stronger every day, not just changing industries but creating incredible new opportunities for *you*. \n\nAt SkillBrain, we believe in being more than just observers – we want to put you in the driver's seat! 🚦 This new era of AI and automatization isn't just about theory; it's about mastering practical skills that make a real-world impact. \n\nImagine a career where you're equipped with cutting-edge knowledge and hands-on experience, ready to innovate and thrive. That's exactly what our IT Certified Courses with Guaranteed Internships offer. We train you for a REAL job, ensuring you're not just on the AI train, but confidently steering it! 🌟\n\nReady to transform your career and shape the future? Let's get you certified! Link in bio to explore our courses. 👇\n\n#SkillBrain #AICareers #FutureSkills #TechTraining #CareerPath #Innovation #JobReady #InternshipGuaranteed #AIRevolution #LearnWithSkillBrain",
+DEFAULT 2025-12-01T17:01:31.833377Z "platform_media_generation_prompt": "A vibrant and dynamic image. A diverse group of young professionals, looking confident and engaged, are interacting with holographic interfaces displaying abstract data and AI-related visuals. One individual is playfully gesturing as if 'driving' a conceptual 'AI train' with their hands, showing control and empowerment. In the background, a futuristic cityscape with glowing lines representing data flow and connectivity. The overall color palette is bright and optimistic, featuring blues, greens, and purples, with a subtle glow. The style is modern, clean, and inspiring, conveying innovation and opportunity. Focus on positive energy and forward movement."
+DEFAULT 2025-12-01T17:01:31.833380Z }
+DEFAULT 2025-12-01T17:01:31.833385Z --- End Cleaned LLM Response ---
+DEFAULT 2025-12-01T17:01:31.833435Z [INFO] Platform Agent (instagram) Text: Hey future innovators! 👋 Ever feel like the world is speeding up? That's the AI revolution in full s...
+DEFAULT 2025-12-01T17:01:31.833488Z [INFO] Platform Agent (instagram) Media Prompt: A vibrant and dynamic image. A diverse group of young professionals, looking confident and engaged, ...
+DEFAULT 2025-12-01T17:01:31.834865Z [INFO] Using Level 1 (global) image control for linkedin
+DEFAULT 2025-12-01T17:01:31.834920Z [INFO]
+DEFAULT 2025-12-01T17:01:31.834923Z --- Running Layer 3: Platform Adaptation for linkedin ---
+DEFAULT 2025-12-01T17:01:31.834992Z [INFO] [PLATFORM AGENT linkedin] About to invoke Gemini LLM (gemini-2.5-flash).
+DEFAULT 2025-12-01T17:01:31.835170Z [INFO] AFC is enabled with max remote calls: 10.
+DEFAULT 2025-12-01T17:01:38.239441Z [INFO] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+DEFAULT 2025-12-01T17:01:38.240917Z [INFO]
+DEFAULT 2025-12-01T17:01:38.240928Z --- Platform Agent (linkedin): Raw LLM Response (before cleaning) ---
+DEFAULT 2025-12-01T17:01:38.240931Z ```json
+DEFAULT 2025-12-01T17:01:38.240935Z {
+DEFAULT 2025-12-01T17:01:38.240943Z "platform_specific_text": "The future isn't just arriving; it's accelerating at an unprecedented pace, driven by the remarkable advancements in Artificial Intelligence. We're witnessing AI models evolve daily, reshaping industries and creating unparalleled opportunities across the globe.\n\nThose who proactively embrace this powerful technological wave aren't merely observers. They are the pioneers actively shaping tomorrow's landscape, unlocking significant career benefits and staying ahead in a rapidly changing world.\n\nThis new era of AI and automatization demands more than just theoretical understanding. It requires fresh skills, a forward-thinking mindset, and crucially, the mastery of practical applications that deliver real-world impact.\n\nAt SkillBrain, our mission is to equip you with exactly that. Imagine a career path where you possess cutting-edge knowledge and hands-on experience, ready to innovate, lead, and thrive. We provide IT Certified Courses designed to train you for a real job, ensuring you're not just ready for the future, but empowered to drive it.\n\nThe AI train is indeed moving fast. Are you ready to not just be on board, but to take the driver's seat in your career?\n\n#AI #CareerPath #FutureofWork #TechSkills #SkillBrain",
+DEFAULT 2025-12-01T17:01:38.240946Z "platform_media_generation_prompt": null
+DEFAULT 2025-12-01T17:01:38.240949Z }
+DEFAULT 2025-12-01T17:01:38.240951Z ```
+DEFAULT 2025-12-01T17:01:38.240954Z --- End Raw LLM Response ---
+DEFAULT 2025-12-01T17:01:38.241014Z [INFO]
+DEFAULT 2025-12-01T17:01:38.241017Z --- Platform Agent (linkedin): Cleaned LLM Response (for JSON parsing) ---
+DEFAULT 2025-12-01T17:01:38.241019Z {
+DEFAULT 2025-12-01T17:01:38.241024Z "platform_specific_text": "The future isn't just arriving; it's accelerating at an unprecedented pace, driven by the remarkable advancements in Artificial Intelligence. We're witnessing AI models evolve daily, reshaping industries and creating unparalleled opportunities across the globe.\n\nThose who proactively embrace this powerful technological wave aren't merely observers. They are the pioneers actively shaping tomorrow's landscape, unlocking significant career benefits and staying ahead in a rapidly changing world.\n\nThis new era of AI and automatization demands more than just theoretical understanding. It requires fresh skills, a forward-thinking mindset, and crucially, the mastery of practical applications that deliver real-world impact.\n\nAt SkillBrain, our mission is to equip you with exactly that. Imagine a career path where you possess cutting-edge knowledge and hands-on experience, ready to innovate, lead, and thrive. We provide IT Certified Courses designed to train you for a real job, ensuring you're not just ready for the future, but empowered to drive it.\n\nThe AI train is indeed moving fast. Are you ready to not just be on board, but to take the driver's seat in your career?\n\n#AI #CareerPath #FutureofWork #TechSkills #SkillBrain",
+DEFAULT 2025-12-01T17:01:38.241026Z "platform_media_generation_prompt": null
+DEFAULT 2025-12-01T17:01:38.241029Z }
+DEFAULT 2025-12-01T17:01:38.241031Z --- End Cleaned LLM Response ---
+DEFAULT 2025-12-01T17:01:38.241151Z [INFO] Platform Agent (linkedin) Text: The future isn't just arriving; it's accelerating at an unprecedented pace, driven by the remarkable...
+DEFAULT 2025-12-01T17:01:38.241262Z [INFO] Using Level 1 (global) image control for twitter
+DEFAULT 2025-12-01T17:01:38.241329Z [INFO]
+DEFAULT 2025-12-01T17:01:38.241334Z --- Running Layer 3: Platform Adaptation for twitter ---
+DEFAULT 2025-12-01T17:01:38.241400Z [INFO] [PLATFORM AGENT twitter] About to invoke Gemini LLM (gemini-2.5-flash).
+DEFAULT 2025-12-01T17:01:38.241531Z [INFO] AFC is enabled with max remote calls: 10.
+DEFAULT 2025-12-01T17:05:32.037150Z [INFO] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent "HTTP/1.1 200 OK"
+DEFAULT 2025-12-01T17:05:32.038557Z [INFO]
+DEFAULT 2025-12-01T17:05:32.038563Z --- Platform Agent (twitter): Raw LLM Response (before cleaning) ---
+DEFAULT 2025-12-01T17:05:32.038568Z The phrase "It is what it is" is a common idiom. Let's analyze its meaning and explore alternative ways to express similar sentiments.
+DEFAULT 2025-12-01T17:05:32.038572Z **Meaning of "It is what it is":**
+DEFAULT 2025-12-01T17:05:32.038576Z This phrase generally conveys a sense of **acceptance, resignation, or acknowledgement of an unchangeable reality.** It implies that:
+DEFAULT 2025-12-01T17:05:32.038586Z 1. **A situation is a certain way and cannot be altered.** There's no point in wishing it were different, complaining about it, or trying to change what is fundamentally fixed.
+DEFAULT 2025-12-01T17:05:32.038589Z 2. **One must deal with the situation as it stands.** It's a call to move forward and adapt rather than dwell on what can't be changed.
+DEFAULT 2025-12-01T17:05:32.038591Z 3. **There's no explanation or justification needed.** The situation's nature is self-evident, and further discussion about its causes or fairness is futile.
+DEFAULT 2025-12-01T17:05:32.038594Z 4. **It can be used to signal the end of a discussion or a decision not to elaborate further.**
+DEFAULT 2025-12-01T17:05:32.038598Z **Contexts of Use:**
+DEFAULT 2025-12-01T17:05:32.038600Z * **Acceptance of a difficult situation:** "We lost the game, it is what it is."
+DEFAULT 2025-12-01T17:05:32.038603Z * **Resignation to something unavoidable:** "The flight's cancelled, so we'll have to find another way home. It is what it is."
+DEFAULT 2025-12-01T17:05:32.038606Z * **Acknowledging a fixed characteristic:** "He's always going to be a bit stubborn. It is what it is."
+DEFAULT 2025-12-01T17:05:32.038609Z * **Moving past something frustrating:** "The paperwork is a mess, but it is what it is, and we have to get it done."
+DEFAULT 2025-12-01T17:05:32.038612Z **Connotations:**
+DEFAULT 2025-12-01T17:05:32.038616Z While primarily neutral in its core meaning of acceptance, "it is what it is" can sometimes carry a connotation of:
+DEFAULT 2025-12-01T17:05:32.038629Z * **Fatalism:** A belief that events are predetermined and unavoidable.
+DEFAULT 2025-12-01T17:05:32.038632Z * **Indifference:** A lack of strong feeling or concern, though this is less common than simple acceptance.
+DEFAULT 2025-12-01T17:05:32.038634Z * **Frustration (underlying):** While accepting the situation, the speaker might still be internally frustrated about it.
+DEFAULT 2025-12-01T17:05:32.038637Z * **Pragmatism:** A focus on practical considerations and solutions rather than ideals.
+DEFAULT 2025-12-01T17:05:32.038641Z **Alternative Phrases and Nuances:**
+DEFAULT 2025-12-01T17:05:32.038644Z Here are several alternatives, each with slightly different connotations:
+DEFAULT 2025-12-01T17:05:32.038647Z **For acceptance/resignation:**
+DEFAULT 2025-12-01T17:05:32.038650Z 1. **"That's just the way it is."** (Very similar, perhaps slightly more direct)
+DEFAULT 2025-12-01T17:05:32.038654Z 2. **"We'll just have to deal with it."** (More proactive, emphasizes action despite the situation)
+DEFAULT 2025-12-01T17:05:32.038657Z 3. **"Such is life."** (More philosophical, often used for minor disappointments)
+DEFAULT 2025-12-01T17:05:32.038660Z 4. **"There's nothing we can do."** (Emphasizes powerlessness)
+DEFAULT 2025-12-01T17:05:32.038662Z 5. **"It's out of our hands."** (Highlights external control)
+DEFAULT 2025-12-01T17:05:32.038665Z 6. **"We have to accept it."** (Direct call to accept)
+DEFAULT 2025-12-01T17:05:32.038667Z 7. **"What's done is done."** (Specifically for past events)
+DEFAULT 2025-12-01T17:05:32.038669Z 8. **"C'est la vie."** (French, similar to "such is life," often used for minor setbacks)
+DEFAULT 2025-12-01T17:05:32.038672Z **For acknowledging a fact/reality:**
+DEFAULT 2025-12-01T17:05:32.038675Z 9. **"That's the reality of the situation."** (More formal, emphasizes objective truth)
+DEFAULT 2025-12-01T17:05:32.038678Z 10. **"It's a fact."** (Direct, undeniable)
+DEFAULT 2025-12-01T17:05:32.038680Z 11. **"Plain and simple."** (Emphasizes clarity and straightforwardness)
+DEFAULT 2025-12-01T17:05:32.038683Z **For moving on/pragmatism:**
+DEFAULT 2025-12-01T17:05:32.038685Z 12. **"Let's move on."** (Suggests actively changing focus)
+DEFAULT 2025-12-01T17:05:32.038687Z 13. **"We need to find a solution."** (Focuses on problem-solving)
+DEFAULT 2025-12-01T17:05:32.038690Z 14. **"Time to adapt."** (Highlights the need for flexibility)
+DEFAULT 2025-12-01T17:05:32.038692Z 15. **"We'll make the best of it."** (More optimistic, focuses on positive framing)
+DEFAULT 2025-12-01T17:05:32.038695Z **When "It is what it is" might be perceived negatively:**
+DEFAULT 2025-12-01T17:05:32.038698Z * **As dismissive:** If someone is seeking sympathy or a solution, and you use "it is what it is," it can sound like you don't care or aren't willing to engage.
+DEFAULT 2025-12-01T17:05:32.038700Z * **As a lack of effort:** It can imply a failure to try and change things that *could* potentially be changed.
+DEFAULT 2025-12-01T17:05:32.038702Z * **As overly fatalistic:** In situations where there is room for agency, it might sound like giving up too easily.
+DEFAULT 2025-12-01T17:05:32.038705Z **In summary:**
+DEFAULT 2025-12-01T17:05:32.038708Z "It is what it is" is a concise and commonly understood phrase for accepting an unchangeable reality. Its exact nuance can vary with context and tone, ranging from pragmatic acceptance to slight resignation. When choosing alternatives, consider whether you want to emphasize acceptance, powerlessness, a call to action, or a more philosophical outlook.
+DEFAULT 2025-12-01T17:05:32.038712Z --- End Raw LLM Response ---
+DEFAULT 2025-12-01T17:05:32.038714Z [INFO]
+DEFAULT 2025-12-01T17:05:32.038717Z --- Platform Agent (twitter): Cleaned LLM Response (for JSON parsing) ---
+DEFAULT 2025-12-01T17:05:32.038719Z The phrase "It is what it is" is a common idiom. Let's analyze its meaning and explore alternative ways to express similar sentiments.
+DEFAULT 2025-12-01T17:05:32.038722Z **Meaning of "It is what it is":**
+DEFAULT 2025-12-01T17:05:32.038725Z This phrase generally conveys a sense of **acceptance, resignation, or acknowledgement of an unchangeable reality.** It implies that:
+DEFAULT 2025-12-01T17:05:32.038731Z 1. **A situation is a certain way and cannot be altered.** There's no point in wishing it were different, complaining about it, or trying to change what is fundamentally fixed.
+DEFAULT 2025-12-01T17:05:32.038735Z 2. **One must deal with the situation as it stands.** It's a call to move forward and adapt rather than dwell on what can't be changed.
+DEFAULT 2025-12-01T17:05:32.038737Z 3. **There's no explanation or justification needed.** The situation's nature is self-evident, and further discussion about its causes or fairness is futile.
+DEFAULT 2025-12-01T17:05:32.038740Z 4. **It can be used to signal the end of a discussion or a decision not to elaborate further.**
+DEFAULT 2025-12-01T17:05:32.038746Z **Contexts of Use:**
+DEFAULT 2025-12-01T17:05:32.038749Z * **Acceptance of a difficult situation:** "We lost the game, it is what it is."
+DEFAULT 2025-12-01T17:05:32.038751Z * **Resignation to something unavoidable:** "The flight's cancelled, so we'll have to find another way home. It is what it is."
+DEFAULT 2025-12-01T17:05:32.038754Z * **Acknowledging a fixed characteristic:** "He's always going to be a bit stubborn. It is what it is."
+DEFAULT 2025-12-01T17:05:32.038756Z * **Moving past something frustrating:** "The paperwork is a mess, but it is what it is, and we have to get it done."
+DEFAULT 2025-12-01T17:05:32.038759Z **Connotations:**
+DEFAULT 2025-12-01T17:05:32.038765Z While primarily neutral in its core meaning of acceptance, "it is what it is" can sometimes carry a connotation of:
+DEFAULT 2025-12-01T17:05:32.038768Z * **Fatalism:** A belief that events are predetermined and unavoidable.
+DEFAULT 2025-12-01T17:05:32.038770Z * **Indifference:** A lack of strong feeling or concern, though this is less common than simple acceptance.
+DEFAULT 2025-12-01T17:05:32.038777Z * **Frustration (underlying):** While accepting the situation, the speaker might still be internally frustrated about it.
+DEFAULT 2025-12-01T17:05:32.038779Z * **Pragmatism:** A focus on practical considerations and solutions rather than ideals.
+DEFAULT 2025-12-01T17:05:32.038781Z **Alternative Phrases and Nuances:**
+DEFAULT 2025-12-01T17:05:32.038784Z Here are several alternatives, each with slightly different connotations:
+DEFAULT 2025-12-01T17:05:32.038786Z **For acceptance/resignation:**
+DEFAULT 2025-12-01T17:05:32.038789Z 1. **"That's just the way it is."** (Very similar, perhaps slightly more direct)
+DEFAULT 2025-12-01T17:05:32.038793Z 2. **"We'll just have to deal with it."** (More proactive, emphasizes action despite the situation)
+DEFAULT 2025-12-01T17:05:32.038797Z 3. **"Such is life."** (More philosophical, often used for minor disappointments)
+DEFAULT 2025-12-01T17:05:32.038800Z 4. **"There's nothing we can do."** (Emphasizes powerlessness)
+DEFAULT 2025-12-01T17:05:32.038802Z 5. **"It's out of our hands."** (Highlights external control)
+DEFAULT 2025-12-01T17:05:32.038804Z 6. **"We have to accept it."** (Direct call to accept)
+DEFAULT 2025-12-01T17:05:32.038806Z 7. **"What's done is done."** (Specifically for past events)
+DEFAULT 2025-12-01T17:05:32.038808Z 8. **"C'est la vie."** (French, similar to "such is life," often used for minor setbacks)
+DEFAULT 2025-12-01T17:05:32.038810Z **For acknowledging a fact/reality:**
+DEFAULT 2025-12-01T17:05:32.038812Z 9. **"That's the reality of the situation."** (More formal, emphasizes objective truth)
+DEFAULT 2025-12-01T17:05:32.038814Z 10. **"It's a fact."** (Direct, undeniable)
+DEFAULT 2025-12-01T17:05:32.038817Z 11. **"Plain and simple."** (Emphasizes clarity and straightforwardness)
+DEFAULT 2025-12-01T17:05:32.038821Z **For moving on/pragmatism:**
+DEFAULT 2025-12-01T17:05:32.038824Z 12. **"Let's move on."** (Suggests actively changing focus)
+DEFAULT 2025-12-01T17:05:32.038832Z 13. **"We need to find a solution."** (Focuses on problem-solving)
+DEFAULT 2025-12-01T17:05:32.038834Z 14. **"Time to adapt."** (Highlights the need for flexibility)
+DEFAULT 2025-12-01T17:05:32.038838Z 15. **"We'll make the best of it."** (More optimistic, focuses on positive framing)
+DEFAULT 2025-12-01T17:05:32.038841Z **When "It is what it is" might be perceived negatively:**
+DEFAULT 2025-12-01T17:05:32.038846Z * **As dismissive:** If someone is seeking sympathy or a solution, and you use "it is what it is," it can sound like you don't care or aren't willing to engage.
+DEFAULT 2025-12-01T17:05:32.038849Z * **As a lack of effort:** It can imply a failure to try and change things that *could* potentially be changed.
+DEFAULT 2025-12-01T17:05:32.038851Z * **As overly fatalistic:** In situations where there is room for agency, it might sound like giving up too easily.
+DEFAULT 2025-12-01T17:05:32.038854Z **In summary:**
+DEFAULT 2025-12-01T17:05:32.038858Z "It is what it is" is a concise and commonly understood phrase for accepting an unchangeable reality. Its exact nuance can vary with context and tone, ranging from pragmatic acceptance to slight resignation. When choosing alternatives, consider whether you want to emphasize acceptance, powerlessness, a call to action, or a more philosophical outlook.
+DEFAULT 2025-12-01T17:05:32.038861Z --- End Cleaned LLM Response ---
+DEFAULT 2025-12-01T17:05:32.040786Z [ERROR] [PLATFORM AGENT ERROR] JSON parsing error for twitter: Expecting value (line 1 col 1)
+ERROR 2025-12-01T17:05:32.040820Z Traceback (most recent call last): File "/app/llm_services.py", line 273, in run_platform_adaptation_agent parsed_response: PlatformAgentOutput = json.loads(cleaned_json_str) ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ File "/usr/local/lib/python3.12/json/__init__.py", line 346, in loads return _default_decoder.decode(s) ^^^^^^^^^^^^^^^^^^^^^^^^^^ File "/usr/local/lib/python3.12/json/decoder.py", line 338, in decode obj, end = self.raw_decode(s, idx=_w(s, 0).end()) ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ File "/usr/local/lib/python3.12/json/decoder.py", line 356, in raw_decode raise JSONDecodeError("Expecting value", s, err.value) from None json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+DEFAULT 2025-12-01T17:05:32.040824Z [ERROR] Problematic document for json.loads() (cleaned string): 'The phrase "It is what it is" is a common idiom. Let's analyze its meaning and explore alternative ways to express similar sentiments.
+DEFAULT 2025-12-01T17:05:32.040827Z **Meaning of "It is what it is":**
+DEFAULT 2025-12-01T17:05:32.040831Z This phrase generally conveys a sense of **acceptance, resignation, or acknowledgement of an unchangeable reality.** It implies that:
+DEFAULT 2025-12-01T17:05:32.040834Z 1. **A situation is a certain way and cannot be altered.** There's no point in wishing it were different, complaining about it, or trying to change what is fundamentally fixed.
+DEFAULT 2025-12-01T17:05:32.040836Z 2. **One must ...'
+DEFAULT 2025-12-01T17:05:32.041204Z Received enhanced pipeline request for company: SkillBrain, topic: Latest AI Models are getting stronger, users who are on board of this AI Train will benefit
+DEFAULT 2025-12-01T17:05:32.041222Z 🚀 Starting Enhanced Social Media Post Generation Pipeline 🚀
+DEFAULT 2025-12-01T17:05:32.041226Z 🎨 Using image generation model: imagen-4.0-fast-generate-001
+DEFAULT 2025-12-01T17:05:32.041229Z 🎬 Using filename base: latest_ai_models_are
+DEFAULT 2025-12-01T17:05:32.041233Z 📝 Core post text generated: 'The future is accelerating, and at its core are the latest advancements in AI. We're witnessing AI m...'
+DEFAULT 2025-12-01T17:05:32.041236Z ⚙️ Processing enhanced adaptation for instagram
+DEFAULT 2025-12-01T17:05:32.041238Z ✓ Using Level 1 (global) image control for instagram
+DEFAULT 2025-12-01T17:05:32.041241Z ✓ Image instructions for instagram: IMPORTANT: Create a clean visual design without any text, captions, labels, or written words in the ...
+DEFAULT 2025-12-01T17:05:32.041244Z ✓ Sanitized and enhanced media prompt for instagram with level_1 controls
+DEFAULT 2025-12-01T17:05:32.041247Z ⚙️ Processing enhanced adaptation for linkedin
+DEFAULT 2025-12-01T17:05:32.041255Z ✓ Using Level 1 (global) image control for linkedin
+DEFAULT 2025-12-01T17:05:32.041258Z ⚙️ Processing enhanced adaptation for twitter
+DEFAULT 2025-12-01T17:05:32.041261Z ✓ Using Level 1 (global) image control for twitter
+DEFAULT 2025-12-01T17:05:32.041275Z Error processing enhanced pipeline for company: SkillBrain. Error: Platform Agent for twitter failed due to JSON parsing error: Expecting value
+DEFAULT 2025-12-01T17:05:32.041281Z INFO: 169.254.169.126:63396 - "POST /generate-posts-enhanced HTTP/1.1" 500 Internal Server Error
+DEFAULT 2025-12-01T17:20:35.363934Z INFO: Shutting down
+DEFAULT 2025-12-01T17:20:35.465351Z INFO: Waiting for application shutdown.
+DEFAULT 2025-12-01T17:20:35.465491Z INFO: Application shutdown complete.
+DEFAULT 2025-12-01T17:20:35.465586Z INFO: Finished server process [1]
