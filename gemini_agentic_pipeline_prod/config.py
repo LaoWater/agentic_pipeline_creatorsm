@@ -32,7 +32,7 @@ DECISION_LLM_MODEL = "gemini-2.5-flash"
 PLATFORM_LLM_MODEL = "gemini-2.5-flash"
 
 # --- Image Generation Model Configuration ---
-IMAGE_GENERATION_MODEL = "imagen-4.0-fast-generate-001"  # Centralized image generation model for all visual asset creation
+IMAGE_GENERATION_MODEL = "imagen-4.0-generate-001"  # Centralized image generation model for all visual asset creation
 
 # --- Output Configuration ---
 if os.environ.get("RUNNING_IN_DOCKER") == "true":
