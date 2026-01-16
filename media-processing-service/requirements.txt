@@ -1,0 +1,18 @@
+# Media Processing Service Dependencies
+
+# Web framework
+fastapi==0.109.0
+uvicorn==0.27.0
+
+# Async HTTP client
+aiohttp==3.9.1
+aiofiles==23.2.1
+
+# Supabase client - pinned to working version
+supabase==2.0.3
+postgrest==0.13.0
+storage3==0.6.1
+gotrue==1.3.0
+
+# Pydantic for data validation
+pydantic==2.5.3
