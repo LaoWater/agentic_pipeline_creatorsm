@@ -138,15 +138,23 @@ def run_ffmpeg(args: List[str]) -> None:
 
 def trim_video(input_path: Path, output_path: Path, start_time: float, duration: float) -> None:
     """
-    Trim video using FFmpeg with stream copy (lossless).
+    Trim video using FFmpeg with re-encoding for frame-accurate cuts.
 
-    Uses -ss before -i for fast seeking, -c copy to avoid re-encoding.
+    Uses -i before -ss for accurate seeking (input-based seeking with re-encode).
+    Re-encodes with high quality settings (CRF 18) for near-lossless output.
+    This approach ensures exact frame trimming regardless of keyframe positions.
     """
+    end_time = start_time + duration
+
     run_ffmpeg([
-        "-ss", str(start_time),
         "-i", str(input_path),
-        "-t", str(duration),
-        "-c", "copy",
+        "-ss", str(start_time),
+        "-to", str(end_time),
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "18",
+        "-c:a", "aac",
+        "-b:a", "192k",
         "-avoid_negative_ts", "make_zero",
         str(output_path)
     ])
