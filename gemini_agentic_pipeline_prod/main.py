@@ -12,6 +12,12 @@ import uvicorn
 from pipeline_orchestrator import generate_social_media_posts_pipeline, generate_enhanced_social_media_posts_pipeline
 from api_models import PipelineRequest, ContentGeneratorData
 from config import BASE_OUTPUT_FOLDER  # For ensuring output folder exists
+from seo_agent import (
+    SearchEngagementRequest,
+    AnalyzePresenceRequest,
+    search_engagement_pipeline,
+    analyze_presence_pipeline,
+)
 
 app = FastAPI(
     title="CreatorsM Agentic Pipeline",
@@ -146,6 +152,38 @@ async def run_enhanced_pipeline_background(request_data: ContentGeneratorData):
     except Exception as e:
         print(f"Error processing enhanced pipeline for company: {request_data.company.name}. Error: {e}")
         raise HTTPException(status_code=500, detail=f"Enhanced pipeline processing failed: {str(e)}")
+
+
+# ── SEO Agent Endpoints ──────────────────────────────────────────────────────
+
+@app.post("/seo/search-engagement", summary="Find Real Engagement Opportunities")
+async def seo_search_engagement(request: SearchEngagementRequest):
+    """
+    Find REAL engagement opportunities across Reddit, YouTube, Quora, Twitter, and forums.
+    Uses Serper.dev to search Google for actual discussions, then scores and suggests responses.
+    Every returned URL is from Google's real index.
+    """
+    try:
+        result = await search_engagement_pipeline(request)
+        return result
+    except Exception as e:
+        print(f"[SEO] Error in search-engagement: {e}")
+        raise HTTPException(status_code=500, detail=f"SEO engagement search failed: {str(e)}")
+
+
+@app.post("/seo/analyze-presence", summary="Analyze Brand SEO Presence")
+async def seo_analyze_presence(request: AnalyzePresenceRequest):
+    """
+    Comprehensive SEO presence analysis backed by real search data.
+    Crawls the website, checks brand presence across platforms via Google,
+    analyzes competitors, and provides data-backed recommendations.
+    """
+    try:
+        result = await analyze_presence_pipeline(request)
+        return result
+    except Exception as e:
+        print(f"[SEO] Error in analyze-presence: {e}")
+        raise HTTPException(status_code=500, detail=f"SEO presence analysis failed: {str(e)}")
 
 
 if __name__ == "__main__":
