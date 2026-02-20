@@ -208,7 +208,7 @@ platform IN ('reddit','twitter','facebook','youtube','quora','forum','linkedin',
 
 ## Deployment Checklist
 
-1. **Add env var to Cloud Run**: `SERPER_API_KEY=44017eaabc9d8c5374454fe14ef090ddc6d28cbe`
+1. **Add env var to Cloud Run**: `SERPER_API_KEY=`
 2. **Redeploy Python backend** to Cloud Run (new files: seo_search.py, seo_agent.py, modified main.py)
 3. **Run Supabase migration**: `20260219000000_seo_schema_enhancements.sql`
 4. **Deploy frontend** (new seoService.ts, modified SeoAgent.tsx, modified creditsService.ts)

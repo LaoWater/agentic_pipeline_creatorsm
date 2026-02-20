@@ -85,7 +85,9 @@ SERVICE_NAME="gcs-gemini-openai-app"
 BUILD_SA="creatorsmultiv-service@creators-multi-verse.iam.gserviceaccount.com"
 GEMINI_SECRET_NAME="GEMINI_API_KEY"
 OPENAI_SECRET_NAME="OPENAI_API_KEY_VALUE"
+SERPER_SECRET_NAME="SERPER_API_KEY"
 GCS_BUCKET_NAME_FOR_APP="creatorsm-media-bucket"
+SEO_ENV_VARS="SEO_LLM_PROVIDER=gemini,SEO_GEMINI_MODEL_QUERIES=gemini-3-flash-preview,SEO_GEMINI_MODEL_SCORING=gemini-3-flash-preview,SEO_GEMINI_MODEL_ANALYSIS=gemini-3.1-pro-preview"
 
 echo $PROJECT_ID
 
@@ -110,7 +112,26 @@ gcloud run deploy $SERVICE_NAME \
   --region $REGION \
   --allow-unauthenticated \
   --port 8000 \
-  --set-env-vars="GCS_BUCKET_NAME=$GCS_BUCKET_NAME_FOR_APP,GCS_PROJECT_ID=$PROJECT_ID" \
-  --update-secrets="GEMINI_API_KEY=${GEMINI_SECRET_NAME}:latest,OPENAI_API_KEY_VALUE=${OPENAI_SECRET_NAME}:latest" \
+  --set-env-vars="GCS_BUCKET_NAME=$GCS_BUCKET_NAME_FOR_APP,GCS_PROJECT_ID=$PROJECT_ID,$SEO_ENV_VARS" \
+  --update-secrets="GEMINI_API_KEY=${GEMINI_SECRET_NAME}:latest,SERPER_API_KEY=${SERPER_SECRET_NAME}:latest" \
   --ingress=all \
   --project $PROJECT_ID
+
+# Optional: include OpenAI secret only if you still want OpenAI fallback paths
+# gcloud run services update $SERVICE_NAME \
+#   --region $REGION \
+#   --project $PROJECT_ID \
+#   --update-secrets="OPENAI_API_KEY_VALUE=${OPENAI_SECRET_NAME}:latest"
+
+# Fast update (no rebuild): adjust SEO model/env routing only
+gcloud run services update $SERVICE_NAME \
+  --region $REGION \
+  --project $PROJECT_ID \
+  --update-env-vars="$SEO_ENV_VARS"
+
+
+# Routing and Re-routing back to latest
+gcloud run services update-traffic gcs-gemini-openai-app \
+  --to-latest \
+  --region=europe-central2 \
+  --project=creators-multi-verse

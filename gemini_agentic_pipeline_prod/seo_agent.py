@@ -1,30 +1,245 @@
 # seo_agent.py
 """
 SEO Intelligence Agent - Real engagement discovery and presence analysis.
-Uses Serper.dev for real Google search results and OpenAI for analysis.
+Uses Serper.dev for real Google search results with resilient LLM analysis
+(OpenAI primary, Gemini fallback in auto mode).
 """
 
 import json
 import logging
 import os
-from typing import Optional
+import re
 
 from openai import AsyncOpenAI
+from google.genai.types import GenerateContentConfig
 from pydantic import BaseModel, Field
 
 from seo_search import (
     crawl_website,
     find_engagement_opportunities,
     search_brand_presence,
-    search_platform,
 )
+from visual_model import get_google_genai_client
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client
-openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY_VALUE", ""))
+SEO_OPENAI_MODEL = os.environ.get("SEO_OPENAI_MODEL", "gpt-5.2")
+SEO_GEMINI_MODEL = os.environ.get("SEO_GEMINI_MODEL", "gemini-3-flash-preview")
+SEO_LLM_PROVIDER = os.environ.get("SEO_LLM_PROVIDER", "gemini").strip().lower()
 
-SEO_LLM_MODEL = "gpt-5.2"
+SEO_OPENAI_MODEL_QUERIES = os.environ.get("SEO_OPENAI_MODEL_QUERIES", SEO_OPENAI_MODEL)
+SEO_OPENAI_MODEL_SCORING = os.environ.get("SEO_OPENAI_MODEL_SCORING", SEO_OPENAI_MODEL)
+SEO_OPENAI_MODEL_ANALYSIS = os.environ.get("SEO_OPENAI_MODEL_ANALYSIS", SEO_OPENAI_MODEL)
+
+SEO_GEMINI_MODEL_QUERIES = os.environ.get("SEO_GEMINI_MODEL_QUERIES", SEO_GEMINI_MODEL)
+SEO_GEMINI_MODEL_SCORING = os.environ.get("SEO_GEMINI_MODEL_SCORING", SEO_GEMINI_MODEL)
+SEO_GEMINI_MODEL_ANALYSIS = os.environ.get("SEO_GEMINI_MODEL_ANALYSIS", SEO_GEMINI_MODEL)
+
+# Startup diagnostic — helps triage Cloud Run LLM routing issues
+logger.info(
+    f"[SEO] Config: provider={SEO_LLM_PROVIDER}, "
+    f"openai_model={SEO_OPENAI_MODEL}, gemini_model={SEO_GEMINI_MODEL}, "
+    f"openai_task_models=(q:{SEO_OPENAI_MODEL_QUERIES}, s:{SEO_OPENAI_MODEL_SCORING}, a:{SEO_OPENAI_MODEL_ANALYSIS}), "
+    f"gemini_task_models=(q:{SEO_GEMINI_MODEL_QUERIES}, s:{SEO_GEMINI_MODEL_SCORING}, a:{SEO_GEMINI_MODEL_ANALYSIS}), "
+    f"GEMINI_API_KEY={'SET' if os.environ.get('GEMINI_API_KEY') else 'MISSING'}, "
+    f"OPENAI_API_KEY_VALUE={'SET' if os.environ.get('OPENAI_API_KEY_VALUE') else 'MISSING'}"
+)
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(f"[SEO] Invalid int for {name}='{value}', using default={default}")
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        logger.warning(f"[SEO] Invalid float for {name}='{value}', using default={default}")
+        return default
+
+
+SEO_OPENAI_MAX_RETRIES = _env_int("SEO_OPENAI_MAX_RETRIES", 4)
+SEO_OPENAI_TIMEOUT_SECONDS = _env_float("SEO_OPENAI_TIMEOUT_SECONDS", 45.0)
+
+_gemini_client = None
+
+
+def _get_openai_client() -> AsyncOpenAI:
+    """Create a fresh AsyncOpenAI client per request to avoid stale connection pools in Cloud Run."""
+    return AsyncOpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY_VALUE", ""),
+        max_retries=SEO_OPENAI_MAX_RETRIES,
+        timeout=SEO_OPENAI_TIMEOUT_SECONDS,
+    )
+
+
+def _get_gemini_client():
+    """Lazy init Gemini client to avoid startup failures when fallback is unused."""
+    global _gemini_client
+    if _gemini_client is None:
+        _gemini_client = get_google_genai_client()
+    return _gemini_client
+
+
+def _provider_order() -> list[str]:
+    if SEO_LLM_PROVIDER == "openai":
+        return ["openai"]
+    if SEO_LLM_PROVIDER == "gemini":
+        return ["gemini"]
+    if SEO_LLM_PROVIDER != "auto":
+        logger.warning(f"[SEO] Unknown SEO_LLM_PROVIDER='{SEO_LLM_PROVIDER}', defaulting to 'auto'")
+    return ["openai", "gemini"]
+
+
+def _error_chain(exc: Exception, max_depth: int = 3) -> str:
+    parts = [f"{type(exc).__name__}: {exc}"]
+    current = exc.__cause__ or exc.__context__
+    depth = 0
+    while current is not None and depth < max_depth:
+        parts.append(f"{type(current).__name__}: {current}")
+        current = current.__cause__ or current.__context__
+        depth += 1
+    return " | caused by: ".join(parts)
+
+
+def _parse_json_object(raw_text: str) -> dict:
+    text = (raw_text or "").strip()
+    if not text:
+        raise ValueError("LLM returned empty content")
+
+    # Accept JSON wrapped in markdown code fences.
+    fence_match = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    parsed = json.loads(text)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"Expected JSON object, got {type(parsed).__name__}")
+    return parsed
+
+
+async def _call_openai_json(
+    *,
+    task_name: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+    max_tokens: int,
+) -> dict:
+    if not os.environ.get("OPENAI_API_KEY_VALUE", "").strip():
+        raise ValueError("OPENAI_API_KEY_VALUE is missing or empty")
+
+    response = await _get_openai_client().chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=temperature,
+        max_tokens=max_tokens,
+        response_format={"type": "json_object"},
+    )
+    request_id = getattr(response, "_request_id", None)
+    if request_id:
+        logger.info(f"[SEO] {task_name} OpenAI request_id={request_id} model={model}")
+    content = response.choices[0].message.content if response.choices else ""
+    return _parse_json_object(content)
+
+
+async def _call_gemini_json(
+    *,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+    max_tokens: int,
+) -> dict:
+    client = _get_gemini_client()
+    config_kwargs = {
+        "temperature": temperature,
+        "max_output_tokens": max_tokens,
+        "response_mime_type": "application/json",
+    }
+    try:
+        config = GenerateContentConfig(**config_kwargs)
+    except TypeError:
+        # Backward compatibility for older google-genai versions.
+        config_kwargs.pop("response_mime_type", None)
+        try:
+            config = GenerateContentConfig(**config_kwargs)
+        except TypeError:
+            config_kwargs.pop("max_output_tokens", None)
+            config = GenerateContentConfig(**config_kwargs)
+    response = await client.aio.models.generate_content(
+        model=model,
+        contents=f"{system_prompt}\n\n{user_prompt}",
+        config=config,
+    )
+
+    raw_text = getattr(response, "text", "") or ""
+    if not raw_text and getattr(response, "candidates", None):
+        candidate = response.candidates[0]
+        if candidate and candidate.content and candidate.content.parts:
+            raw_text = "".join(
+                part.text for part in candidate.content.parts if hasattr(part, "text") and isinstance(part.text, str)
+            )
+
+    return _parse_json_object(raw_text)
+
+
+async def _run_llm_json_task(
+    *,
+    task_name: str,
+    openai_model: str = "",
+    gemini_model: str = "",
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+    max_tokens: int,
+) -> dict:
+    resolved_openai_model = openai_model or SEO_OPENAI_MODEL
+    resolved_gemini_model = gemini_model or SEO_GEMINI_MODEL
+    errors: list[str] = []
+    for provider in _provider_order():
+        try:
+            if provider == "openai":
+                parsed = await _call_openai_json(
+                    task_name=task_name,
+                    model=resolved_openai_model,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            else:
+                parsed = await _call_gemini_json(
+                    model=resolved_gemini_model,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            model_used = resolved_openai_model if provider == "openai" else resolved_gemini_model
+            logger.info(f"[SEO] {task_name} completed with provider={provider} model={model_used}")
+            return parsed
+        except Exception as exc:
+            details = _error_chain(exc)
+            model_used = resolved_openai_model if provider == "openai" else resolved_gemini_model
+            errors.append(f"{provider}({model_used}): {details}")
+            logger.warning(f"[SEO] {task_name} failed with provider={provider} model={model_used}: {details}")
+
+    raise RuntimeError(f"All LLM providers failed for {task_name}. " + " || ".join(errors))
 
 
 # ── Pydantic Models ──────────────────────────────────────────────────────────
@@ -133,21 +348,24 @@ Rules:
 Return a JSON object with a single key "queries" containing an array of search query strings."""
 
     try:
-        response = await openai_client.chat.completions.create(
-            model=SEO_LLM_MODEL,
-            messages=[
-                {"role": "system", "content": "You generate precise Google search queries. Return valid JSON only."},
-                {"role": "user", "content": prompt},
-            ],
+        parsed = await _run_llm_json_task(
+            task_name="generate_search_queries",
+            openai_model=SEO_OPENAI_MODEL_QUERIES,
+            gemini_model=SEO_GEMINI_MODEL_QUERIES,
+            system_prompt="You generate precise Google search queries. Return valid JSON only.",
+            user_prompt=prompt,
             temperature=0.7,
             max_tokens=1000,
-            response_format={"type": "json_object"},
         )
-        content = response.choices[0].message.content
-        parsed = json.loads(content)
-        return parsed.get("queries", [])
+        queries = parsed.get("queries", [])
+        if not isinstance(queries, list):
+            raise ValueError("LLM returned non-list 'queries'")
+        cleaned = [q.strip() for q in queries if isinstance(q, str) and q.strip()]
+        if not cleaned:
+            raise ValueError("LLM returned empty 'queries'")
+        return cleaned[:12]
     except Exception as e:
-        logger.error(f"[SEO] Failed to generate search queries: {e}")
+        logger.error(f"[SEO] Failed to generate search queries: {_error_chain(e)}")
         # Fallback: generate basic queries manually
         fallback = [
             f'site:reddit.com "{request.company_name}" OR {keywords_str}',
@@ -204,26 +422,26 @@ Return a JSON object with key "scored_results" containing an array of objects, e
 Only include results with relevance_score >= 30. Sort by relevance_score descending."""
 
     try:
-        response = await openai_client.chat.completions.create(
-            model=SEO_LLM_MODEL,
-            messages=[
-                {"role": "system", "content": "You are an SEO engagement expert. Score search results and craft authentic responses. Return valid JSON only."},
-                {"role": "user", "content": prompt},
-            ],
+        parsed = await _run_llm_json_task(
+            task_name="score_and_respond",
+            openai_model=SEO_OPENAI_MODEL_SCORING,
+            gemini_model=SEO_GEMINI_MODEL_SCORING,
+            system_prompt="You are an SEO engagement expert. Score search results and craft authentic responses. Return valid JSON only.",
+            user_prompt=prompt,
             temperature=0.7,
             max_tokens=4000,
-            response_format={"type": "json_object"},
         )
-        content = response.choices[0].message.content
-        parsed = json.loads(content)
         results = parsed.get("scored_results", [])
+        if not isinstance(results, list):
+            raise ValueError("LLM returned non-list 'scored_results'")
         # Ensure every result has url_verified=True since these came from Serper
         for r in results:
-            r["url_verified"] = True
-            r["discovered_via"] = "serper"
+            if isinstance(r, dict):
+                r["url_verified"] = True
+                r["discovered_via"] = "serper"
         return results
     except Exception as e:
-        logger.error(f"[SEO] Failed to score results: {e}")
+        logger.error(f"[SEO] Failed to score results: {_error_chain(e)}")
         # Return raw results with basic scoring
         return [
             {
@@ -372,29 +590,45 @@ Return a JSON object with:
 4. "recommendations": Array of exactly 5 specific, actionable recommendations. Each should reference the real data (e.g., "You have 0 Reddit mentions - create an AMA in r/[relevant_subreddit]")."""
 
     try:
-        response = await openai_client.chat.completions.create(
-            model=SEO_LLM_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a data-driven SEO analyst. Base ALL scores on the real search data provided. Return valid JSON only.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+        parsed = await _run_llm_json_task(
+            task_name="run_presence_analysis",
+            openai_model=SEO_OPENAI_MODEL_ANALYSIS,
+            gemini_model=SEO_GEMINI_MODEL_ANALYSIS,
+            system_prompt="You are a data-driven SEO analyst. Base ALL scores on the real search data provided. Return valid JSON only.",
+            user_prompt=prompt,
             temperature=0.5,
             max_tokens=3000,
-            response_format={"type": "json_object"},
         )
-        content = response.choices[0].message.content
-        parsed = json.loads(content)
+
+        platform_scores = parsed.get("platform_scores", {})
+        if not isinstance(platform_scores, dict):
+            platform_scores = {}
+        normalized_scores = {}
+        for platform in ["google", "reddit", "youtube", "twitter", "quora", "linkedin"]:
+            raw_score = platform_scores.get(platform, 0)
+            try:
+                normalized_scores[platform] = max(0, min(int(raw_score), 100))
+            except Exception:
+                normalized_scores[platform] = 0
+
+        recommendations = parsed.get("recommendations", [])
+        if not isinstance(recommendations, list):
+            recommendations = []
+
+        visibility_score = parsed.get("visibility_score", 25)
+        try:
+            visibility_score = max(0, min(int(visibility_score), 100))
+        except Exception:
+            visibility_score = 25
+
         return {
             "analysis": parsed.get("analysis", "Analysis could not be generated."),
-            "visibility_score": parsed.get("visibility_score", 25),
-            "platform_scores": parsed.get("platform_scores", {}),
-            "recommendations": parsed.get("recommendations", []),
+            "visibility_score": visibility_score,
+            "platform_scores": normalized_scores,
+            "recommendations": recommendations[:5],
         }
     except Exception as e:
-        logger.error(f"[SEO] LLM analysis failed: {e}")
+        logger.error(f"[SEO] LLM analysis failed: {_error_chain(e)}")
         # Calculate basic scores from real data
         basic_scores = {}
         for platform, data in presence_data.items():
