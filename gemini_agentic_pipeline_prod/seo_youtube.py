@@ -9,7 +9,8 @@ Free quota: 10,000 units/day.
 
 Strategy: Use search.list sparingly, commentThreads.list heavily.
 
-Env var: YOUTUBE_API_KEY (from Google Cloud Console)
+Env var: YOUTUBE_API_KEY or GEMINI_API_KEY (if the same Google Cloud key
+has both Generative Language API and YouTube Data API v3 enabled).
 
 Returns results in the same format as seo_search.find_engagement_opportunities
 so the orchestrator can merge them seamlessly.
@@ -24,7 +25,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
+# Use dedicated key if set, otherwise fall back to GEMINI_API_KEY
+# (works when the same GCP key has YouTube Data API v3 enabled)
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY") or os.environ.get("GEMINI_API_KEY", "")
 _BASE = "https://www.googleapis.com/youtube/v3"
 _TIMEOUT = 15.0
 

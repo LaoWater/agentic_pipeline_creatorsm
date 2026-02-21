@@ -70,6 +70,7 @@ gcloud run deploy langgraph-api --image gcr.io/terapie-acasa/langgraph-api --pla
 
 
 
+
 -------------------------
 
 MAC:
@@ -117,6 +118,8 @@ gcloud run deploy $SERVICE_NAME \
   --ingress=all \
   --project $PROJECT_ID
 
+
+
 # Optional: include OpenAI secret only if you still want OpenAI fallback paths
 # gcloud run services update $SERVICE_NAME \
 #   --region $REGION \
@@ -135,3 +138,4 @@ gcloud run services update-traffic gcs-gemini-openai-app \
   --to-latest \
   --region=europe-central2 \
   --project=creators-multi-verse
+
