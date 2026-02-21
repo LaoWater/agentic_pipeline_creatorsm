@@ -5,10 +5,13 @@ Uses Serper.dev for real Google search results with resilient LLM analysis
 (OpenAI primary, Gemini fallback in auto mode).
 """
 
+import asyncio
 import json
 import logging
 import os
 import re
+
+import httpx
 
 from openai import AsyncOpenAI
 from google.genai.types import GenerateContentConfig
@@ -19,6 +22,8 @@ from seo_search import (
     find_engagement_opportunities,
     search_brand_presence,
 )
+from seo_reddit import find_reddit_engagement
+from seo_youtube import find_youtube_engagement
 from visual_model import get_google_genai_client
 
 logger = logging.getLogger(__name__)
@@ -269,61 +274,172 @@ class AnalyzePresenceRequest(BaseModel):
 async def search_engagement_pipeline(request: SearchEngagementRequest) -> dict:
     """
     Find REAL engagement opportunities across platforms.
-    Every URL returned is from Google's actual index.
 
-    Pipeline:
-    1. LLM generates targeted search queries
-    2. Serper.dev executes real Google searches
-    3. LLM scores results and generates suggested responses
+    Multi-agent pipeline:
+    1. LLM generates search keywords (not site:-prefixed queries)
+    2. Three agents run in parallel:
+       - Reddit Agent  (free native API)
+       - YouTube Agent (free Data API v3)
+       - Serper Agent  (Google Search — scoped to Quora + forums only)
+    3. Results merged, deduplicated, scored by LLM
+    4. URL verification via async HEAD requests
     """
     logger.info(f"[SEO] Starting engagement search for '{request.company_name}'")
 
-    # Step 1: Generate smart search queries
-    queries = await _generate_search_queries(request)
-    logger.info(f"[SEO] Generated {len(queries)} search queries")
+    # Step 1: Generate search keywords (shared across all agents)
+    keywords = _extract_keywords(request)
+    logger.info(f"[SEO] Keywords for multi-agent search: {keywords}")
 
-    # Step 2: Execute real searches via Serper.dev
-    raw_results = await find_engagement_opportunities(
-        queries=queries,
-        num_per_query=5,
-        time_range="m",  # Last month for freshness
+    # Also generate Serper-specific queries for Quora + forums
+    serper_queries = await _generate_serper_queries(request)
+    logger.info(f"[SEO] Generated {len(serper_queries)} Serper queries (Quora/forums)")
+
+    # Step 2: Run all three agents in parallel
+    reddit_task = find_reddit_engagement(
+        keywords=keywords,
+        num_per_keyword=5,
+        time_filter="week",
     )
-    logger.info(f"[SEO] Found {len(raw_results)} raw results from Serper")
+    youtube_task = find_youtube_engagement(
+        keywords=keywords,
+        num_per_keyword=3,
+        time_filter="week",
+        include_comments=True,
+    )
+    serper_task = _serper_with_fallback(serper_queries)
 
-    if not raw_results:
-        # Broaden the search - try with longer time range
-        raw_results = await find_engagement_opportunities(
-            queries=queries[:5],
-            num_per_query=8,
-            time_range="y",  # Last year
-        )
-        logger.info(f"[SEO] Broadened search found {len(raw_results)} results")
+    reddit_results, youtube_results, serper_results = await asyncio.gather(
+        reddit_task, youtube_task, serper_task,
+        return_exceptions=False,
+    )
+
+    # Handle exceptions from individual agents gracefully
+    if isinstance(reddit_results, Exception):
+        logger.error(f"[SEO] Reddit agent failed: {reddit_results}")
+        reddit_results = []
+    if isinstance(youtube_results, Exception):
+        logger.error(f"[SEO] YouTube agent failed: {youtube_results}")
+        youtube_results = []
+    if isinstance(serper_results, Exception):
+        logger.error(f"[SEO] Serper agent failed: {serper_results}")
+        serper_results = []
+
+    # Tag discovered_via on raw results
+    for r in reddit_results:
+        r["discovered_via"] = "reddit_api"
+    for r in youtube_results:
+        r["discovered_via"] = "youtube_api"
+    for r in serper_results:
+        r["discovered_via"] = "serper"
+
+    # Step 3: Merge and deduplicate
+    raw_results = _merge_and_deduplicate(reddit_results, youtube_results, serper_results)
+    logger.info(
+        f"[SEO] Multi-agent results: "
+        f"Reddit={len(reddit_results)}, YouTube={len(youtube_results)}, "
+        f"Serper={len(serper_results)} → {len(raw_results)} unique"
+    )
 
     if not raw_results:
         return {
             "opportunities": [],
-            "queries_used": queries,
+            "queries_used": keywords + serper_queries,
             "message": "No engagement opportunities found. Try different keywords.",
         }
 
-    # Step 3: LLM scores and generates responses
+    # Step 4: LLM scores and generates responses
     opportunities = await _score_and_respond(raw_results, request)
     logger.info(f"[SEO] Scored and generated responses for {len(opportunities)} opportunities")
 
+    # Step 5: Verify URLs are actually alive (async HEAD requests)
+    opportunities = await _verify_urls(opportunities)
+
     return {
         "opportunities": opportunities,
-        "queries_used": queries,
+        "queries_used": keywords + serper_queries,
         "total_raw_results": len(raw_results),
-        "message": f"Found {len(opportunities)} engagement opportunities with real, verified URLs.",
+        "sources": {
+            "reddit": len(reddit_results),
+            "youtube": len(youtube_results),
+            "serper": len(serper_results),
+        },
+        "message": f"Found {len(opportunities)} engagement opportunities.",
     }
 
 
-async def _generate_search_queries(request: SearchEngagementRequest) -> list[str]:
-    """Use LLM to generate targeted search queries for finding engagement opportunities."""
+def _extract_keywords(request: SearchEngagementRequest) -> list[str]:
+    """Extract clean search keywords from the request (no site: operators)."""
+    keywords = list(request.keywords) if request.keywords else []
 
+    # Add company name as a keyword
+    if request.company_name and request.company_name not in keywords:
+        keywords.append(request.company_name)
+
+    # If we have very few keywords, generate some from the audience/industry
+    if len(keywords) < 3:
+        if request.industry:
+            keywords.append(request.industry)
+        if request.target_audience:
+            # Extract key phrases (first 3 words of target audience)
+            words = request.target_audience.split()[:5]
+            if len(words) >= 2:
+                keywords.append(" ".join(words))
+
+    # Deduplicate while preserving order
+    seen = set()
+    clean = []
+    for kw in keywords:
+        kw_lower = kw.strip().lower()
+        if kw_lower and kw_lower not in seen:
+            seen.add(kw_lower)
+            clean.append(kw.strip())
+
+    return clean[:8]  # Cap at 8 keywords
+
+
+def _merge_and_deduplicate(*result_lists: list[dict]) -> list[dict]:
+    """Merge multiple result lists, deduplicate by URL."""
+    seen_urls: set[str] = set()
+    merged: list[dict] = []
+    for results in result_lists:
+        for r in results:
+            url = r.get("url", "")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                merged.append(r)
+    return merged
+
+
+async def _serper_with_fallback(queries: list[str]) -> list[dict]:
+    """Run Serper searches with week → month → year fallback."""
+    results = await find_engagement_opportunities(
+        queries=queries,
+        num_per_query=5,
+        time_range="w",
+    )
+    if not results:
+        results = await find_engagement_opportunities(
+            queries=queries,
+            num_per_query=5,
+            time_range="m",
+        )
+    if not results:
+        results = await find_engagement_opportunities(
+            queries=queries,
+            num_per_query=8,
+            time_range="y",
+        )
+    return results
+
+
+async def _generate_serper_queries(request: SearchEngagementRequest) -> list[str]:
+    """
+    Generate Google search queries scoped to Quora + forums only.
+    Reddit and YouTube are handled by their native APIs.
+    """
     keywords_str = ", ".join(request.keywords) if request.keywords else "general industry topics"
 
-    prompt = f"""You are an SEO expert. Generate 8-12 targeted Google search queries to find REAL discussions and engagement opportunities for this company.
+    prompt = f"""You are an SEO expert. Generate 4-6 targeted Google search queries to find discussions on Quora, forums, and blogs.
 
 Company: {request.company_name}
 Industry: {request.industry}
@@ -331,31 +447,29 @@ Keywords: {keywords_str}
 Target Audience: {request.target_audience}
 Website: {request.website_url}
 
+IMPORTANT: Do NOT generate queries for Reddit or YouTube (those are handled separately via native APIs).
+
 Generate queries that will find:
-1. Reddit discussions where people ask about or discuss topics related to this company's offerings (2-3 queries with site:reddit.com)
-2. YouTube videos reviewing or discussing related products/services (1-2 queries with site:youtube.com)
-3. Quora questions about the industry/topics (1-2 queries with site:quora.com)
-4. General forum discussions and blog posts (2-3 queries without site: operator)
-5. Twitter/X discussions (1 query with site:twitter.com OR site:x.com)
+1. Quora questions about the industry/topics (2 queries with site:quora.com)
+2. General forum discussions, blog comments, and community posts (2-4 queries — use keywords naturally, optionally with "forum", "discussion", "community" terms)
 
 Rules:
 - Use natural language queries people would actually search
 - Include relevant keywords naturally
 - Use quotes around multi-word phrases when needed
-- Mix broad and specific queries
 - Focus on questions, recommendations, comparisons, and help-seeking posts
 
 Return a JSON object with a single key "queries" containing an array of search query strings."""
 
     try:
         parsed = await _run_llm_json_task(
-            task_name="generate_search_queries",
+            task_name="generate_serper_queries",
             openai_model=SEO_OPENAI_MODEL_QUERIES,
             gemini_model=SEO_GEMINI_MODEL_QUERIES,
             system_prompt="You generate precise Google search queries. Return valid JSON only.",
             user_prompt=prompt,
             temperature=0.7,
-            max_tokens=1000,
+            max_tokens=600,
         )
         queries = parsed.get("queries", [])
         if not isinstance(queries, list):
@@ -363,17 +477,48 @@ Return a JSON object with a single key "queries" containing an array of search q
         cleaned = [q.strip() for q in queries if isinstance(q, str) and q.strip()]
         if not cleaned:
             raise ValueError("LLM returned empty 'queries'")
-        return cleaned[:12]
+        return cleaned[:6]
     except Exception as e:
-        logger.error(f"[SEO] Failed to generate search queries: {_error_chain(e)}")
-        # Fallback: generate basic queries manually
+        logger.error(f"[SEO] Failed to generate Serper queries: {_error_chain(e)}")
         fallback = [
-            f'site:reddit.com "{request.company_name}" OR {keywords_str}',
-            f'site:youtube.com {keywords_str} review',
             f'site:quora.com {keywords_str} recommendation',
             f'{keywords_str} discussion forum',
+            f'{keywords_str} community advice',
         ]
         return fallback
+
+
+async def _verify_urls(results: list[dict]) -> list[dict]:
+    """HEAD-request each URL; set url_verified based on HTTP status < 400."""
+    if not results:
+        return results
+
+    async with httpx.AsyncClient(
+        timeout=5.0,
+        follow_redirects=True,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; BrandVerseBot/1.0)"},
+    ) as client:
+        tasks = [client.head(r["url"]) for r in results if r.get("url")]
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+    idx = 0
+    for r in results:
+        if not r.get("url"):
+            r["url_verified"] = False
+            continue
+        resp = responses[idx]
+        idx += 1
+        if isinstance(resp, Exception):
+            r["url_verified"] = False
+            logger.debug(f"[SEO] URL check failed for {r['url']}: {resp}")
+        else:
+            r["url_verified"] = resp.status_code < 400
+
+    # Sort verified URLs to the top, preserve relative order otherwise
+    results.sort(key=lambda r: (not r.get("url_verified", False)))
+    verified_count = sum(1 for r in results if r.get("url_verified"))
+    logger.info(f"[SEO] URL verification: {verified_count}/{len(results)} alive")
+    return results
 
 
 async def _score_and_respond(
@@ -385,12 +530,24 @@ async def _score_and_respond(
     # Prepare results for LLM (limit to top 20 to keep prompt manageable)
     results_for_llm = []
     for r in raw_results[:20]:
-        results_for_llm.append({
+        entry = {
             "url": r["url"],
             "title": r["title"],
             "snippet": r["snippet"],
             "platform": r["platform"],
-        })
+        }
+        # Include rich metadata from native APIs (helps LLM score better)
+        if r.get("upvotes"):
+            entry["upvotes"] = r["upvotes"]
+        if r.get("num_comments"):
+            entry["num_comments"] = r["num_comments"]
+        if r.get("subreddit"):
+            entry["subreddit"] = r["subreddit"]
+        if r.get("channel_title"):
+            entry["channel_title"] = r["channel_title"]
+        if r.get("date"):
+            entry["date"] = r["date"]
+        results_for_llm.append(entry)
 
     prompt = f"""You are an engagement strategist for "{request.company_name}".
 Industry: {request.industry}
@@ -434,15 +591,16 @@ Only include results with relevance_score >= 30. Sort by relevance_score descend
         results = parsed.get("scored_results", [])
         if not isinstance(results, list):
             raise ValueError("LLM returned non-list 'scored_results'")
-        # Ensure every result has url_verified=True since these came from Serper
+        # Carry over discovered_via from raw results (set by orchestrator)
+        raw_by_url = {r["url"]: r for r in raw_results}
         for r in results:
-            if isinstance(r, dict):
-                r["url_verified"] = True
-                r["discovered_via"] = "serper"
+            if isinstance(r, dict) and not r.get("discovered_via"):
+                raw = raw_by_url.get(r.get("url", ""), {})
+                r["discovered_via"] = raw.get("discovered_via", "serper")
         return results
     except Exception as e:
         logger.error(f"[SEO] Failed to score results: {_error_chain(e)}")
-        # Return raw results with basic scoring
+        # Return raw results with basic scoring; url_verified set by _verify_urls later
         return [
             {
                 "url": r["url"],
@@ -452,8 +610,7 @@ Only include results with relevance_score >= 30. Sort by relevance_score descend
                 "relevance_score": 50,
                 "suggested_response": "Engagement opportunity found - review this discussion for potential participation.",
                 "engagement_reason": "Related to your industry keywords.",
-                "url_verified": True,
-                "discovered_via": "serper",
+                "discovered_via": r.get("discovered_via", "serper"),
             }
             for r in raw_results[:10]
         ]
