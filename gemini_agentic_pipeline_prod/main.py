@@ -12,11 +12,15 @@ import uvicorn
 from pipeline_orchestrator import generate_social_media_posts_pipeline, generate_enhanced_social_media_posts_pipeline
 from api_models import PipelineRequest, ContentGeneratorData
 from config import BASE_OUTPUT_FOLDER  # For ensuring output folder exists
+from openai_smoke_test import OpenAISmokeRequest, run_openai_async_smoke
 from seo_agent import (
     SearchEngagementRequest,
     AnalyzePresenceRequest,
+    ManageKeywordsRequest,
     search_engagement_pipeline,
     analyze_presence_pipeline,
+    analyze_presence_pipeline_v2,
+    manage_keywords_pipeline,
 )
 
 app = FastAPI(
@@ -171,19 +175,46 @@ async def seo_search_engagement(request: SearchEngagementRequest):
         raise HTTPException(status_code=500, detail=f"SEO engagement search failed: {str(e)}")
 
 
-@app.post("/seo/analyze-presence", summary="Analyze Brand SEO Presence")
+@app.post("/seo/analyze-presence", summary="Analyze Brand SEO Presence (4-Pillar)")
 async def seo_analyze_presence(request: AnalyzePresenceRequest):
     """
-    Comprehensive SEO presence analysis backed by real search data.
-    Crawls the website, checks brand presence across platforms via Google,
-    analyzes competitors, and provides data-backed recommendations.
+    4-Pillar SEO presence analysis backed by real search data.
+    Pillars: Google Search, AI Visibility, Community Presence, Website Technical.
+    Returns pillar scores, marketing plan, and data-backed recommendations.
     """
     try:
-        result = await analyze_presence_pipeline(request)
+        result = await analyze_presence_pipeline_v2(request)
         return result
     except Exception as e:
-        print(f"[SEO] Error in analyze-presence: {e}")
+        print(f"[SEO] Error in analyze-presence v2: {e}")
         raise HTTPException(status_code=500, detail=f"SEO presence analysis failed: {str(e)}")
+
+
+@app.post("/seo/manage-keywords", summary="Manage SEO Keywords")
+async def seo_manage_keywords(request: ManageKeywordsRequest):
+    """
+    Keyword management: suggest new keywords or analyze existing ones.
+    action='suggest': LLM suggests keywords based on company info.
+    action='analyze': Rate existing keywords for SEO value.
+    """
+    try:
+        result = await manage_keywords_pipeline(request)
+        return result
+    except Exception as e:
+        print(f"[SEO] Error in manage-keywords: {e}")
+        raise HTTPException(status_code=500, detail=f"Keyword management failed: {str(e)}")
+
+
+@app.post("/debug/openai-smoke-async", summary="Minimal async OpenAI connectivity smoke test")
+async def debug_openai_smoke_async(request: OpenAISmokeRequest):
+    """
+    Direct async OpenAI call for Cloud Run connectivity diagnostics.
+    Isolated from SEO logic to validate pure OpenAI transport/auth behavior.
+    """
+    result = await run_openai_async_smoke(request)
+    if not result.get("ok"):
+        print(f"[OPENAI SMOKE] Failed: {result.get('error', 'unknown error')}")
+    return result
 
 
 if __name__ == "__main__":

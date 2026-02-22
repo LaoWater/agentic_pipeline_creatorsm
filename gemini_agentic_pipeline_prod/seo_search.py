@@ -2,8 +2,10 @@
 """
 Serper.dev API wrapper for real Google search results.
 Used by the SEO Agent to find real engagement opportunities and measure platform visibility.
+Enhanced with LLM-verified search results for the 4-pillar analysis system.
 """
 
+import json
 import os
 import httpx
 import logging
@@ -367,3 +369,164 @@ async def crawl_website(url: str, max_pages: int = 8, max_chars: int = 50000) ->
             "url": url,
         },
     }
+
+
+# ── LLM-Verified Search (Enhanced for 4-Pillar System) ──────────────────────
+
+async def verify_search_results(
+    results: list[dict],
+    company_name: str,
+    company_description: str,
+    llm_caller=None,
+) -> list[dict]:
+    """
+    Batch-verify search results using an LLM for relevance and trustworthiness.
+
+    Args:
+        results: Raw search results with url, title, snippet
+        company_name: Brand name for context
+        company_description: What the company does
+        llm_caller: Async function(task_name, system_prompt, user_prompt, ...) -> dict
+                    Passed from seo_agent to avoid circular imports.
+
+    Returns:
+        Same results list with added verification fields per result
+    """
+    if not results or llm_caller is None:
+        # Return results with default verification if no LLM available
+        for r in results:
+            r["verified_relevant"] = True
+            r["trustworthiness_score"] = 50
+            r["visibility_impact"] = "medium"
+            r["llm_reasoning"] = "Unverified (LLM unavailable)"
+        return results
+
+    # Process in batches of 5
+    batch_size = 5
+    for i in range(0, len(results), batch_size):
+        batch = results[i : i + batch_size]
+        batch_data = [
+            {"url": r["url"], "title": r["title"], "snippet": r.get("snippet", "")}
+            for r in batch
+        ]
+
+        prompt = f"""You are verifying Google search results for relevance to a specific brand.
+
+Brand: {company_name}
+Description: {company_description}
+
+Search results to verify:
+{json.dumps(batch_data, indent=2)}
+
+For each result, determine:
+1. Is it genuinely relevant to this brand (not just keyword coincidence)?
+2. How trustworthy is the source (0-100)?
+3. What's the visibility impact (high/medium/low)?
+
+Return JSON with key "verified" containing an array matching the input order:
+[{{"verified_relevant": bool, "trustworthiness_score": int, "visibility_impact": "high"|"medium"|"low", "llm_reasoning": "brief reason"}}]"""
+
+        try:
+            parsed = await llm_caller(
+                task_name="verify_search_results",
+                system_prompt="You verify search results for brand relevance. Return valid JSON only.",
+                user_prompt=prompt,
+                temperature=0.2,
+                max_tokens=800,
+            )
+            verified_list = parsed.get("verified", [])
+            for j, v in enumerate(verified_list):
+                if j < len(batch) and isinstance(v, dict):
+                    batch[j]["verified_relevant"] = v.get("verified_relevant", True)
+                    batch[j]["trustworthiness_score"] = max(
+                        0, min(int(v.get("trustworthiness_score", 50)), 100)
+                    )
+                    batch[j]["visibility_impact"] = v.get("visibility_impact", "medium")
+                    batch[j]["llm_reasoning"] = v.get("llm_reasoning", "")
+        except Exception as e:
+            logger.warning(f"[SEO] Search verification batch failed: {e}")
+            for r in batch:
+                r.setdefault("verified_relevant", True)
+                r.setdefault("trustworthiness_score", 50)
+                r.setdefault("visibility_impact", "medium")
+                r.setdefault("llm_reasoning", "Verification failed")
+
+    return results
+
+
+async def search_brand_presence_enhanced(
+    brand_name: str,
+    company_description: str,
+    keywords: list[str],
+    platforms: list[str] = None,
+    llm_caller=None,
+) -> dict:
+    """
+    Enhanced brand presence search with LLM verification.
+    Wraps search_brand_presence() and adds verification + company name search.
+
+    Args:
+        brand_name: Company/brand name
+        company_description: What the company does
+        keywords: Target keywords
+        platforms: Platforms to check
+        llm_caller: LLM function for verification
+
+    Returns:
+        Dict per platform with mention_count, verified_mention_count, top_results
+    """
+    # Run standard brand presence search
+    presence = await search_brand_presence(brand_name, keywords, platforms)
+
+    # Also search Google specifically for company name (broader than site:-scoped)
+    try:
+        company_search = await search_google(f'"{brand_name}"', num_results=20)
+        company_results = [
+            {
+                "url": item.get("link", ""),
+                "title": item.get("title", ""),
+                "snippet": item.get("snippet", ""),
+                "position": item.get("position", 0),
+                "date": item.get("date", ""),
+                "platform": _detect_platform(item.get("link", "")),
+            }
+            for item in company_search.get("organic", [])
+        ]
+    except Exception as e:
+        logger.warning(f"[SEO] Company name search failed: {e}")
+        company_results = []
+
+    # LLM-verify all top results across platforms
+    all_results_to_verify = []
+    result_platform_map = []
+
+    for platform, data in presence.items():
+        for r in data.get("top_results", []):
+            all_results_to_verify.append(r)
+            result_platform_map.append(platform)
+
+    if all_results_to_verify and llm_caller:
+        all_results_to_verify = await verify_search_results(
+            all_results_to_verify, brand_name, company_description, llm_caller
+        )
+
+    # Put verified results back and compute verified_mention_count
+    idx = 0
+    for platform, data in presence.items():
+        verified_count = 0
+        for r in data.get("top_results", []):
+            if idx < len(all_results_to_verify):
+                verified = all_results_to_verify[idx]
+                r["verified_relevant"] = verified.get("verified_relevant", True)
+                r["trustworthiness_score"] = verified.get("trustworthiness_score", 50)
+                r["visibility_impact"] = verified.get("visibility_impact", "medium")
+                if r.get("verified_relevant"):
+                    verified_count += 1
+                idx += 1
+        data["verified_mention_count"] = verified_count
+
+    # Add company_name_results to Google platform data
+    if "google" in presence:
+        presence["google"]["company_name_results"] = company_results[:10]
+
+    return presence

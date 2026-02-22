@@ -21,9 +21,13 @@ from seo_search import (
     crawl_website,
     find_engagement_opportunities,
     search_brand_presence,
+    search_brand_presence_enhanced,
+    verify_search_results,
 )
 from seo_reddit import find_reddit_engagement
 from seo_youtube import find_youtube_engagement
+from seo_website_audit import audit_website
+from seo_ai_visibility import check_ai_visibility
 from visual_model import get_google_genai_client
 
 logger = logging.getLogger(__name__)
@@ -40,12 +44,40 @@ SEO_GEMINI_MODEL_QUERIES = os.environ.get("SEO_GEMINI_MODEL_QUERIES", SEO_GEMINI
 SEO_GEMINI_MODEL_SCORING = os.environ.get("SEO_GEMINI_MODEL_SCORING", SEO_GEMINI_MODEL)
 SEO_GEMINI_MODEL_ANALYSIS = os.environ.get("SEO_GEMINI_MODEL_ANALYSIS", SEO_GEMINI_MODEL)
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_reasoning_effort(name: str, default: str) -> str:
+    valid = {"none", "low", "medium", "high", "xhigh"}
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in valid:
+        return normalized
+    logger.warning(f"[SEO] Invalid reasoning effort for {name}='{value}', using default={default}")
+    return default
+
+
+SEO_OPENAI_REASONING_EFFORT_ANALYSIS = _env_reasoning_effort(
+    "SEO_OPENAI_REASONING_EFFORT_ANALYSIS",
+    "medium",
+)
+SEO_USE_OPENAI_FOR_FULL_ANALYSIS = _env_bool("SEO_USE_OPENAI_FOR_FULL_ANALYSIS", True)
+
 # Startup diagnostic — helps triage Cloud Run LLM routing issues
 logger.info(
     f"[SEO] Config: provider={SEO_LLM_PROVIDER}, "
     f"openai_model={SEO_OPENAI_MODEL}, gemini_model={SEO_GEMINI_MODEL}, "
     f"openai_task_models=(q:{SEO_OPENAI_MODEL_QUERIES}, s:{SEO_OPENAI_MODEL_SCORING}, a:{SEO_OPENAI_MODEL_ANALYSIS}), "
     f"gemini_task_models=(q:{SEO_GEMINI_MODEL_QUERIES}, s:{SEO_GEMINI_MODEL_SCORING}, a:{SEO_GEMINI_MODEL_ANALYSIS}), "
+    f"openai_reasoning_effort_analysis={SEO_OPENAI_REASONING_EFFORT_ANALYSIS}, "
+    f"use_openai_for_full_analysis={SEO_USE_OPENAI_FOR_FULL_ANALYSIS}, "
     f"GEMINI_API_KEY={'SET' if os.environ.get('GEMINI_API_KEY') else 'MISSING'}, "
     f"OPENAI_API_KEY_VALUE={'SET' if os.environ.get('OPENAI_API_KEY_VALUE') else 'MISSING'}"
 )
@@ -106,6 +138,19 @@ def _provider_order() -> list[str]:
     return ["openai", "gemini"]
 
 
+def _resolve_provider_order(custom_order: list[str] | None) -> list[str]:
+    if not custom_order:
+        return _provider_order()
+    normalized: list[str] = []
+    for provider in custom_order:
+        p = (provider or "").strip().lower()
+        if p in {"openai", "gemini"} and p not in normalized:
+            normalized.append(p)
+    if not normalized:
+        return _provider_order()
+    return normalized
+
+
 def _error_chain(exc: Exception, max_depth: int = 3) -> str:
     parts = [f"{type(exc).__name__}: {exc}"]
     current = exc.__cause__ or exc.__context__
@@ -115,6 +160,18 @@ def _error_chain(exc: Exception, max_depth: int = 3) -> str:
         current = current.__cause__ or current.__context__
         depth += 1
     return " | caused by: ".join(parts)
+
+
+def _openai_model_supports_reasoning(model: str) -> bool:
+    model_lower = (model or "").strip().lower()
+    return model_lower.startswith("gpt-5")
+
+
+def _is_reasoning_parameter_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    reasoning_tokens = ("reasoning", "reasoning_effort")
+    parameter_tokens = ("unknown", "unsupported", "unexpected", "invalid", "extra inputs")
+    return any(t in message for t in reasoning_tokens) and any(t in message for t in parameter_tokens)
 
 
 def _parse_json_object(raw_text: str) -> dict:
@@ -141,23 +198,68 @@ async def _call_openai_json(
     user_prompt: str,
     temperature: float,
     max_tokens: int,
+    reasoning_effort: str = "none",
 ) -> dict:
     if not os.environ.get("OPENAI_API_KEY_VALUE", "").strip():
         raise ValueError("OPENAI_API_KEY_VALUE is missing or empty")
-
-    response = await _get_openai_client().chat.completions.create(
-        model=model,
-        messages=[
+    base_kwargs = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=temperature,
-        max_tokens=max_tokens,
-        response_format={"type": "json_object"},
-    )
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+    }
+    client = _get_openai_client()
+    normalized_effort = (reasoning_effort or "none").strip().lower()
+    if normalized_effort not in {"none", "low", "medium", "high", "xhigh"}:
+        logger.warning(
+            f"[SEO] Invalid reasoning_effort='{reasoning_effort}' for {task_name}, falling back to 'none'"
+        )
+        normalized_effort = "none"
+
+    attempt_kwargs: list[dict] = [{}]
+    if normalized_effort != "none":
+        if _openai_model_supports_reasoning(model):
+            attempt_kwargs = [
+                {"reasoning": {"effort": normalized_effort}},
+                {"reasoning_effort": normalized_effort},
+                {},
+            ]
+        else:
+            logger.info(
+                f"[SEO] Skipping reasoning effort for {task_name}; model={model} may not support it"
+            )
+
+    response = None
+    last_reasoning_exc: Exception | None = None
+    for extra_kwargs in attempt_kwargs:
+        try:
+            response = await client.chat.completions.create(**base_kwargs, **extra_kwargs)
+            break
+        except TypeError as exc:
+            if extra_kwargs:
+                last_reasoning_exc = exc
+                continue
+            raise
+        except Exception as exc:
+            if extra_kwargs and _is_reasoning_parameter_error(exc):
+                last_reasoning_exc = exc
+                continue
+            raise
+
+    if response is None:
+        if last_reasoning_exc is not None:
+            raise last_reasoning_exc
+        raise RuntimeError("OpenAI call failed without a concrete exception")
+
     request_id = getattr(response, "_request_id", None)
     if request_id:
-        logger.info(f"[SEO] {task_name} OpenAI request_id={request_id} model={model}")
+        logger.info(
+            f"[SEO] {task_name} OpenAI request_id={request_id} model={model} reasoning_effort={normalized_effort}"
+        )
     content = response.choices[0].message.content if response.choices else ""
     return _parse_json_object(content)
 
@@ -212,11 +314,14 @@ async def _run_llm_json_task(
     user_prompt: str,
     temperature: float,
     max_tokens: int,
+    openai_reasoning_effort: str = "none",
+    provider_order: list[str] | None = None,
 ) -> dict:
     resolved_openai_model = openai_model or SEO_OPENAI_MODEL
     resolved_gemini_model = gemini_model or SEO_GEMINI_MODEL
+    resolved_provider_order = _resolve_provider_order(provider_order)
     errors: list[str] = []
-    for provider in _provider_order():
+    for provider in resolved_provider_order:
         try:
             if provider == "openai":
                 parsed = await _call_openai_json(
@@ -226,6 +331,7 @@ async def _run_llm_json_task(
                     user_prompt=user_prompt,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    reasoning_effort=openai_reasoning_effort,
                 )
             else:
                 parsed = await _call_gemini_json(
@@ -755,6 +861,7 @@ Return a JSON object with:
             user_prompt=prompt,
             temperature=0.5,
             max_tokens=3000,
+            openai_reasoning_effort=SEO_OPENAI_REASONING_EFFORT_ANALYSIS,
         )
 
         platform_scores = parsed.get("platform_scores", {})
@@ -806,10 +913,473 @@ def _summarize_evidence(presence_data: dict) -> dict:
     for platform, data in presence_data.items():
         evidence[platform] = {
             "mention_count": data.get("mention_count", 0),
+            "verified_mention_count": data.get("verified_mention_count", data.get("mention_count", 0)),
             "top_results": [
-                {"url": r["url"], "title": r["title"], "snippet": r["snippet"]}
-                for r in data.get("top_results", [])[:3]
+                {
+                    "url": r["url"],
+                    "title": r["title"],
+                    "snippet": r["snippet"],
+                    "verified_relevant": r.get("verified_relevant", True),
+                    "trustworthiness_score": r.get("trustworthiness_score"),
+                    "visibility_impact": r.get("visibility_impact"),
+                }
+                for r in data.get("top_results", [])[:5]
             ],
             "keyword_coverage": len(data.get("keyword_results", [])),
         }
     return evidence
+
+
+# ── Manage Keywords Pipeline ─────────────────────────────────────────────────
+
+class ManageKeywordsRequest(BaseModel):
+    company_name: str = Field(..., description="Company name")
+    company_description: str = Field(default="", description="What the company does")
+    industry: str = Field(default="", description="Industry")
+    target_audience: str = Field(default="", description="Target audience")
+    existing_keywords: list[str] = Field(default_factory=list, description="Already tracked keywords")
+    action: str = Field(default="suggest", description="'suggest' or 'analyze'")
+
+
+async def manage_keywords_pipeline(request: ManageKeywordsRequest) -> dict:
+    """
+    Keyword management via LLM.
+    - action='suggest': Generate new keyword suggestions
+    - action='analyze': Rate existing keywords for SEO value
+    """
+    if request.action == "analyze" and request.existing_keywords:
+        return await _analyze_keywords(request)
+    return await _suggest_keywords(request)
+
+
+async def _suggest_keywords(request: ManageKeywordsRequest) -> dict:
+    """LLM suggests keywords based on company info."""
+    existing_str = ", ".join(request.existing_keywords) if request.existing_keywords else "None yet"
+
+    prompt = f"""You are an SEO keyword strategist. Suggest 10-15 keywords for this company.
+
+Company: {request.company_name}
+Description: {request.company_description}
+Industry: {request.industry}
+Target Audience: {request.target_audience}
+Already Tracking: {existing_str}
+
+For each keyword, categorize as:
+- "primary": Core business terms (high volume, high competition)
+- "secondary": Related terms (medium volume)
+- "long-tail": Specific phrases (lower volume, higher intent)
+- "brand": Brand-related terms
+- "competitor": Competitor-related terms
+
+Return JSON with key "keywords" containing array of objects:
+[{{"keyword": "...", "category": "primary|secondary|long-tail|brand|competitor", "reasoning": "brief reason", "estimated_difficulty": "easy|medium|hard"}}]
+
+Do NOT suggest keywords already being tracked."""
+
+    try:
+        parsed = await _run_llm_json_task(
+            task_name="suggest_keywords",
+            openai_model=SEO_OPENAI_MODEL_QUERIES,
+            gemini_model=SEO_GEMINI_MODEL_QUERIES,
+            system_prompt="You are an SEO keyword expert. Return valid JSON only.",
+            user_prompt=prompt,
+            temperature=0.7,
+            max_tokens=1500,
+        )
+        suggestions = parsed.get("keywords", [])
+        return {"keywords": suggestions, "action": "suggest"}
+    except Exception as e:
+        logger.error(f"[SEO] Keyword suggestion failed: {e}")
+        return {"keywords": [], "action": "suggest", "error": str(e)}
+
+
+async def _analyze_keywords(request: ManageKeywordsRequest) -> dict:
+    """LLM rates existing keywords for SEO value."""
+    keywords_str = ", ".join(request.existing_keywords)
+
+    prompt = f"""Rate these keywords for SEO value for this company:
+
+Company: {request.company_name}
+Description: {request.company_description}
+Industry: {request.industry}
+Keywords: {keywords_str}
+
+Return JSON with key "analysis" containing array matching keyword order:
+[{{"keyword": "...", "seo_value_score": 0-100, "search_volume_estimate": "low|medium|high|very_high", "difficulty_estimate": "easy|medium|hard", "recommendation": "keep|optimize|replace|expand"}}]"""
+
+    try:
+        parsed = await _run_llm_json_task(
+            task_name="analyze_keywords",
+            openai_model=SEO_OPENAI_MODEL_QUERIES,
+            gemini_model=SEO_GEMINI_MODEL_QUERIES,
+            system_prompt="You are an SEO keyword analyst. Return valid JSON only.",
+            user_prompt=prompt,
+            temperature=0.3,
+            max_tokens=1200,
+        )
+        analysis = parsed.get("analysis", [])
+        return {"analysis": analysis, "action": "analyze"}
+    except Exception as e:
+        logger.error(f"[SEO] Keyword analysis failed: {e}")
+        return {"analysis": [], "action": "analyze", "error": str(e)}
+
+
+# ── 4-Pillar Analysis Pipeline (V2) ─────────────────────────────────────────
+
+async def analyze_presence_pipeline_v2(request: AnalyzePresenceRequest) -> dict:
+    """
+    4-Pillar SEO presence analysis.
+
+    Pipeline:
+    Step 0: Crawl website (needed by multiple pillars)
+    Step 1: Run all 4 pillars in parallel
+    Step 2: Competitor analysis
+    Step 3: Art of Marketing synthesis
+    """
+    logger.info(f"[SEO v2] Starting 4-pillar analysis for '{request.company_name}' ({request.website_url})")
+
+    # Step 0: Crawl website
+    website_data = await crawl_website(request.website_url, max_pages=8, max_chars=50000)
+    logger.info(f"[SEO v2] Crawled {website_data['metadata'].get('pages_crawled', 0)} pages")
+
+    company_desc = request.mission or website_data.get("metadata", {}).get("description", "")
+
+    # Helper: LLM caller adapter for verify_search_results
+    async def _llm_caller(task_name, system_prompt, user_prompt, temperature=0.3, max_tokens=800):
+        return await _run_llm_json_task(
+            task_name=task_name,
+            openai_model=SEO_OPENAI_MODEL_QUERIES,
+            gemini_model=SEO_GEMINI_MODEL_QUERIES,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    # Step 1: Run all 4 pillars in parallel
+    async def _pillar_google_search():
+        try:
+            platforms_to_check = ["reddit", "youtube", "quora", "twitter", "linkedin"]
+            return await search_brand_presence_enhanced(
+                brand_name=request.company_name,
+                company_description=company_desc,
+                keywords=request.keywords,
+                platforms=platforms_to_check,
+                llm_caller=_llm_caller,
+            )
+        except Exception as e:
+            logger.error(f"[SEO v2] Pillar 1 (Google Search) failed: {e}")
+            return {}
+
+    async def _pillar_ai_visibility():
+        try:
+            return await check_ai_visibility(
+                company_name=request.company_name,
+                company_description=company_desc,
+                website_url=request.website_url,
+                keywords=request.keywords,
+            )
+        except Exception as e:
+            logger.error(f"[SEO v2] Pillar 2 (AI Visibility) failed: {e}")
+            return {"overall_score": 0, "systems": {}, "key_findings": [], "recommendations": []}
+
+    async def _pillar_community():
+        """Existing presence data, elevated as pillar."""
+        try:
+            platforms_to_check = ["reddit", "youtube", "quora", "twitter", "linkedin"]
+            return await search_brand_presence(
+                brand_name=request.company_name,
+                keywords=request.keywords,
+                platforms=platforms_to_check,
+            )
+        except Exception as e:
+            logger.error(f"[SEO v2] Pillar 3 (Community) failed: {e}")
+            return {}
+
+    async def _pillar_website_technical():
+        try:
+            return await audit_website(request.website_url)
+        except Exception as e:
+            logger.error(f"[SEO v2] Pillar 4 (Website Technical) failed: {e}")
+            return {"crawlability_score": 0, "issues": [], "inferred_tech_stack": []}
+
+    google_data, ai_data, community_data, audit_data = await asyncio.gather(
+        _pillar_google_search(),
+        _pillar_ai_visibility(),
+        _pillar_community(),
+        _pillar_website_technical(),
+    )
+
+    logger.info("[SEO v2] All 4 pillars completed")
+
+    # Step 2: Competitor analysis
+    competitor_data = {}
+    for competitor in request.competitors[:3]:
+        competitor_name = competitor.strip()
+        if not competitor_name:
+            continue
+        try:
+            comp_presence = await search_brand_presence(
+                brand_name=competitor_name,
+                keywords=request.keywords[:2],
+                platforms=["reddit", "youtube", "google"],
+            )
+            competitor_data[competitor_name] = {
+                platform: {"mention_count": data["mention_count"]}
+                for platform, data in comp_presence.items()
+            }
+        except Exception as e:
+            logger.warning(f"[SEO v2] Competitor '{competitor_name}' failed: {e}")
+            competitor_data[competitor_name] = {"error": str(e)}
+
+    # Calculate pillar scores
+    # Pillar 1: Google Search — based on verified mentions
+    google_score = _calculate_google_pillar_score(google_data)
+    # Pillar 2: AI Visibility — directly from check_ai_visibility
+    ai_score = ai_data.get("overall_score", 0)
+    # Pillar 3: Community — based on mention counts across platforms
+    community_score = _calculate_community_pillar_score(community_data)
+    # Pillar 4: Website Technical — crawlability score
+    technical_score = audit_data.get("crawlability_score", 0)
+
+    pillar_scores = {
+        "google_search": google_score,
+        "ai_visibility": ai_score,
+        "community": community_score,
+        "website_technical": technical_score,
+    }
+
+    # Overall visibility score: weighted average
+    overall = int(
+        google_score * 0.30
+        + ai_score * 0.20
+        + community_score * 0.25
+        + technical_score * 0.25
+    )
+
+    # Step 3: Art of Marketing synthesis
+    synthesis = await _synthesize_4_pillar_analysis(
+        request=request,
+        website_data=website_data,
+        pillar_scores=pillar_scores,
+        google_data=google_data,
+        ai_data=ai_data,
+        community_data=community_data,
+        audit_data=audit_data,
+        competitor_data=competitor_data,
+    )
+
+    # Build platform scores from google_data for backward compat
+    platform_scores = {}
+    for platform in ["google", "reddit", "youtube", "twitter", "quora", "linkedin"]:
+        p_data = google_data.get(platform, {})
+        count = p_data.get("verified_mention_count", p_data.get("mention_count", 0))
+        platform_scores[platform] = min(count * 10, 100)
+
+    # Pillar details for frontend
+    pillar_details = {
+        "google_search": {
+            "evidence": _summarize_evidence(google_data),
+            "total_mentions": sum(d.get("mention_count", 0) for d in google_data.values()),
+            "verified_mentions": sum(d.get("verified_mention_count", 0) for d in google_data.values()),
+        },
+        "ai_visibility": ai_data,
+        "community": _summarize_evidence(community_data),
+        "website_technical": {
+            "crawlability_score": audit_data.get("crawlability_score", 0),
+            "issues": audit_data.get("issues", []),
+            "tech_stack": audit_data.get("inferred_tech_stack", []),
+            "js_dependent_content": audit_data.get("js_dependent_content", False),
+            "has_meta_title": audit_data.get("has_meta_title", False),
+            "has_meta_description": audit_data.get("has_meta_description", False),
+            "has_og_tags": audit_data.get("has_og_tags", False),
+            "has_sitemap": audit_data.get("has_sitemap", False),
+            "has_robots_txt": audit_data.get("has_robots_txt", False),
+            "has_canonical_url": audit_data.get("has_canonical_url", False),
+            "response_time_ms": audit_data.get("response_time_ms", 0),
+            "technical_summary": audit_data.get("technical_summary", ""),
+        },
+    }
+
+    return {
+        "analysis": synthesis.get("analysis", ""),
+        "visibility_score": overall,
+        "platform_scores": platform_scores,
+        "recommendations": synthesis.get("recommendations", []),
+        "pillar_scores": pillar_scores,
+        "pillar_details": pillar_details,
+        "marketing_plan": synthesis.get("marketing_plan", {}),
+        "search_evidence": _summarize_evidence(google_data),
+        "competitor_data": competitor_data,
+        "website_metadata": website_data["metadata"],
+    }
+
+
+def _calculate_google_pillar_score(google_data: dict) -> int:
+    """Calculate Google Search pillar score from verified mentions."""
+    if not google_data:
+        return 0
+    total_verified = sum(d.get("verified_mention_count", d.get("mention_count", 0)) for d in google_data.values())
+    total_mentions = sum(d.get("mention_count", 0) for d in google_data.values())
+    # Score based on total presence (cap at 100)
+    base_score = min(total_mentions * 3, 80)
+    # Bonus for verified results
+    if total_mentions > 0:
+        verification_ratio = total_verified / total_mentions
+        base_score += int(verification_ratio * 20)
+    return min(base_score, 100)
+
+
+def _calculate_community_pillar_score(community_data: dict) -> int:
+    """Calculate Community pillar score from mention counts."""
+    if not community_data:
+        return 0
+    # Community platforms (exclude google)
+    community_platforms = {k: v for k, v in community_data.items() if k != "google"}
+    if not community_platforms:
+        return 0
+    total = sum(d.get("mention_count", 0) for d in community_platforms.values())
+    platforms_present = sum(1 for d in community_platforms.values() if d.get("mention_count", 0) > 0)
+    # Score: mentions contribute + platform breadth bonus
+    base = min(total * 5, 70)
+    breadth_bonus = platforms_present * 6  # Up to 30 for 5 platforms
+    return min(base + breadth_bonus, 100)
+
+
+async def _synthesize_4_pillar_analysis(
+    request: AnalyzePresenceRequest,
+    website_data: dict,
+    pillar_scores: dict,
+    google_data: dict,
+    ai_data: dict,
+    community_data: dict,
+    audit_data: dict,
+    competitor_data: dict,
+) -> dict:
+    """
+    Synthesize all 4 pillars into a unified analysis using the Art of Marketing mental model.
+    """
+    # Build evidence summaries
+    google_summary = []
+    for platform, data in google_data.items():
+        count = data.get("mention_count", 0)
+        verified = data.get("verified_mention_count", count)
+        google_summary.append(f"  - {platform}: {count} mentions ({verified} verified)")
+
+    ai_summary = f"  - ChatGPT awareness: {ai_data.get('overall_score', 0)}/100 ({ai_data.get('systems', {}).get('chatgpt', {}).get('awareness', 'unknown')})"
+
+    community_summary = []
+    for platform, data in community_data.items():
+        if platform == "google":
+            continue
+        count = data.get("mention_count", 0)
+        community_summary.append(f"  - {platform}: {count} mentions")
+
+    issues = audit_data.get("issues", [])
+    critical_issues = [i for i in issues if i.get("severity") == "critical"]
+    warning_issues = [i for i in issues if i.get("severity") == "warning"]
+    audit_summary = (
+        f"  - Crawlability: {audit_data.get('crawlability_score', 0)}/100\n"
+        f"  - Critical issues: {len(critical_issues)}, Warnings: {len(warning_issues)}\n"
+        f"  - JS-dependent: {audit_data.get('js_dependent_content', False)}\n"
+        f"  - Tech: {', '.join(t['name'] for t in audit_data.get('inferred_tech_stack', []))}"
+    )
+
+    competitor_summary = ""
+    if competitor_data:
+        comp_lines = []
+        for name, data in competitor_data.items():
+            if "error" in data:
+                continue
+            counts = {p: d.get("mention_count", 0) for p, d in data.items()}
+            comp_lines.append(f"  - {name}: {counts}")
+        if comp_lines:
+            competitor_summary = "\nCompetitor Data:\n" + "\n".join(comp_lines)
+
+    website_content = website_data.get("total_content", "")[:3000]
+
+    prompt = f"""You are a senior marketing strategist and SEO expert. Synthesize a comprehensive analysis using the "Art of Marketing" framework.
+
+═══ COMPANY ═══
+Name: {request.company_name}
+Mission: {request.mission}
+Target Audience: {request.target_audience}
+Keywords: {', '.join(request.keywords) if request.keywords else 'Not specified'}
+
+═══ 4-PILLAR SCORES ═══
+1. Google Search Presence: {pillar_scores['google_search']}/100
+2. AI Visibility: {pillar_scores['ai_visibility']}/100
+3. Community Presence: {pillar_scores['community']}/100
+4. Website Technical: {pillar_scores['website_technical']}/100
+
+═══ PILLAR 1: GOOGLE SEARCH DATA ═══
+{chr(10).join(google_summary)}
+
+═══ PILLAR 2: AI VISIBILITY ═══
+{ai_summary}
+Key findings: {json.dumps(ai_data.get('key_findings', []))}
+
+═══ PILLAR 3: COMMUNITY PRESENCE ═══
+{chr(10).join(community_summary)}
+
+═══ PILLAR 4: WEBSITE TECHNICAL ═══
+{audit_summary}
+{competitor_summary}
+
+═══ WEBSITE CONTENT (excerpt) ═══
+{website_content}
+
+═══ ART OF MARKETING FRAMEWORK ═══
+Apply these principles in your analysis:
+1. Trust Signals: How well does the brand build trust across digital touchpoints?
+2. Social Proof Loop: Are real people talking about this brand? Where?
+3. Modern Decision Funnel: 73% of buying decisions happen outside Google (TikTok, YouTube, Reddit, AI assistants). How visible is this brand in the actual decision journey?
+4. Crawlability Foundation: Can search engines AND AI systems actually access and understand the content?
+5. Keyword Strategy: Are they targeting the right terms at the right intent level?
+
+═══ YOUR TASK ═══
+Return a JSON object with:
+
+1. "analysis": A detailed 4-5 paragraph analysis covering all 4 pillars. Be specific — reference real data. Write for a founder/marketer, not a technical audience.
+
+2. "recommendations": Array of exactly 5 specific, actionable recommendations. Each should reference real data.
+
+3. "marketing_plan": Object with 4 priority tiers:
+   - "quick_wins": Array of 2-3 actions that can be done this week (low effort, high impact)
+   - "foundation": Array of 2-3 foundational fixes (medium effort, critical for long-term)
+   - "growth": Array of 2-3 growth engines to build (higher effort, compounding returns)
+   - "long_term": Array of 1-2 long-term positioning strategies
+
+Each item in the marketing plan should be an object with: "action", "effort" ("low"|"medium"|"high"), "impact" ("low"|"medium"|"high"), "timeframe" ("1 week"|"1 month"|"3 months"|"6 months"), "details" (1-2 sentences)."""
+
+    full_analysis_provider_order = ["openai", "gemini"] if SEO_USE_OPENAI_FOR_FULL_ANALYSIS else None
+
+    try:
+        parsed = await _run_llm_json_task(
+            task_name="synthesize_4_pillar",
+            openai_model=SEO_OPENAI_MODEL_ANALYSIS,
+            gemini_model=SEO_GEMINI_MODEL_ANALYSIS,
+            system_prompt="You are a marketing strategist and SEO expert. Provide data-driven analysis using the Art of Marketing framework. Return valid JSON only.",
+            user_prompt=prompt,
+            temperature=0.5,
+            max_tokens=4000,
+            openai_reasoning_effort=SEO_OPENAI_REASONING_EFFORT_ANALYSIS,
+            provider_order=full_analysis_provider_order,
+        )
+
+        return {
+            "analysis": parsed.get("analysis", "Analysis could not be generated."),
+            "recommendations": parsed.get("recommendations", [])[:5],
+            "marketing_plan": parsed.get("marketing_plan", {}),
+        }
+    except Exception as e:
+        logger.error(f"[SEO v2] Synthesis failed: {e}")
+        return {
+            "analysis": f"4-pillar analysis completed. Scores: Google Search {pillar_scores['google_search']}/100, AI Visibility {pillar_scores['ai_visibility']}/100, Community {pillar_scores['community']}/100, Website Technical {pillar_scores['website_technical']}/100. LLM synthesis unavailable.",
+            "recommendations": [
+                "Improve your weakest pillar first for the biggest gains.",
+                "Ensure your website is crawlable by search engines and AI systems.",
+                "Build community presence on platforms where your audience lives.",
+            ],
+            "marketing_plan": {},
+        }

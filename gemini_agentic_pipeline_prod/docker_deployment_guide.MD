@@ -114,7 +114,7 @@ gcloud run deploy $SERVICE_NAME \
   --allow-unauthenticated \
   --port 8000 \
   --set-env-vars="GCS_BUCKET_NAME=$GCS_BUCKET_NAME_FOR_APP,GCS_PROJECT_ID=$PROJECT_ID,$SEO_ENV_VARS" \
-  --update-secrets="GEMINI_API_KEY=${GEMINI_SECRET_NAME}:latest,SERPER_API_KEY=${SERPER_SECRET_NAME}:latest" \
+  --update-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest,SERPER_API_KEY=SERPER_API_KEY:latest,OPENAI_API_KEY_VALUE=OPENAI_API_KEY_VALUE:latest" \
   --ingress=all \
   --project $PROJECT_ID
 
